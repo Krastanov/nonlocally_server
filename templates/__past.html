@@ -16,11 +16,11 @@
     {% endif %}
   {% endset %}
   {{ event.event(date, speaker, affiliation, title, abstract, bio, footer) }}
-</div>
 {% endfor %}
 {% else %}
-<p>No scheduled talks in the next week.</p>
+<p>No recorded past talks.</p>
 {% endif %}
+</div>
 </div>
 </div>
 {% endblock %}
