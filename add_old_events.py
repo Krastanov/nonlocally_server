@@ -21,13 +21,9 @@ def conn():
     conn.execute("PRAGMA foreign_keys = 1")
     return conn
 
-db_columns_str = 'date, speaker, affiliation, bio, title, abstract, recording_link'
+db_columns_str = 'date, speaker, affiliation, bio, title, abstract, recording_link, email, warmup, recording_consent'
 db_columns = [c.strip() for c in db_columns_str.split(',')]
 print('DB columns supported:', db_columns)
-
-# XXX warmup, email, and sched/conf links are skipped
-default_key = ", warmup, email, recording_consent"
-default_val = ", 0, '', 1"
 
 _, filename, dateformat, *csv_columns = sys.argv
 
@@ -46,6 +42,25 @@ for name in db_columns:
         pass
 
 print('Saved columns: ', list(zip(saved_column_names, saved_column_indices)))
+
+# XXX warmup, email, and others can be skipped
+default_key = []
+default_val = []
+if 'email' not in saved_column_names:
+    default_key.append('email')
+    default_val.append('""')
+if 'warmup' not in saved_column_names:
+    default_key.append('warmup')
+    default_val.append('0')
+if 'recording_consent' not in saved_column_names:
+    default_key.append('recording_consent')
+    default_val.append('0')
+if default_key:
+    default_key = ','+','.join(default_key)
+    default_val = ','+','.join(default_val)
+else:
+    default_key = ''
+    default_val = ''
 
 records = []
 with open(filename) as csv_file:
