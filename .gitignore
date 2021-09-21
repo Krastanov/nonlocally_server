@@ -1,0 +1,7 @@
+*.ipynb
+.ipynb_checkpoints
+__pycache__
+*.log
+config.sqlite
+database.sqlite
+*.swp

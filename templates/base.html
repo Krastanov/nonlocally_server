@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>{% block title %}{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/bootstrap.min.css">
+<link rel="stylesheet" href="/static/pell.min.css">
+<script src="/static/jquery.min.js"></script>
+<script src="/static/underscore.min.js"></script>
+<script src="/static/intercooler.min.js"></script>
+<script src="/static/bootstrap.min.js"></script>
+<script src="/static/pell.min.js"></script>
+<script> //Settings
+$(document).on("beforeAjaxSend.ic", function (evt, settings) {
+  delete settings.headers['X-HTTP-Method-Override']; // TODO ugh... why is this here?
+});
+$.ajaxSetup({
+  timeout:1000
+});
+</script>
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+</html>

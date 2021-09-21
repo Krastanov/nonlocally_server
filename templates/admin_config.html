@@ -1,0 +1,63 @@
+{% extends "baseadmin.html" %}
+{% block row %}
+<div class="col-md-6">
+{% for group,records in configrecords %}
+<div class="panel panel-default" id="panel-group-{{group}}">
+<div class="panel-heading collapsed" role="button" data-toggle="collapse" data-target="#panelbody-group-{{group}}" href="#panelbody-group-{{group}}">{{group}} <span class="caret"></span></div>
+<div class="panel-body collapse" id="panelbody-group-{{group}}">
+{% for k,v,vtype,h in records %}
+<div class="panel panel-default" id="panel-{{k}}">
+  <div class="panel-heading">{{k}} <span class="label label-default">{{vtype}}</span></div>
+  <div class="panel-body">
+  <div id="value-{{k}}">
+    {% if vtype=="html" %}
+      <div class="col-xs-6"><pre style="white-space:pre-wrap;">{{v | e}}</pre></div><div class="col-xs-6" id="htmlvalue-{{k}}">{{v}}</div>
+    {% else %}
+      {{v}}
+    {% endif %}
+  </div>
+  <div id="input-{{k}}" hidden>
+    {% if vtype in ["str", "str[]", "int"]%}
+      <form class="form" action="update/{{k}}"><div class="form-group"><input type="text" class="form-control" name="value" value="{{v}}"></div><button type="submit" class="btn btn-danger">Submit</button></form>
+    {% elif vtype=="html" %}
+      <div id="editor-{{k}}"></div><form action="update/{{k}}"><input type="hidden" id="hidden-{{k}}" name="value" value=""><button type="submit" class="btn btn-danger">Submit</button></form>
+    {% elif vtype=="bool" %}
+      <form class="form" action="update/{{k}}"><div class="radio-inline"><label><input type="radio" name="value" value="True" {{'checked' if v=='True' else ''}}> True</label></div><div class="radio-inline"><label><input type="radio" name="value" value="False" {{'checked' if v=='False' else ''}}> False</label></div><button type="submit" class="btn btn-danger">Submit</button></form>
+    {% else %}
+    this property can not be edited in the web UI
+    {% endif %}
+  </div>
+  </div>
+  <div class="panel-footer"><button type="button" class="btn btn-danger btn-xs" onclick="toggleinput('{{k}}','{{vtype}}');">Edit</button> Help: {{h}}</div>
+</div>
+{% endfor %}
+</div>
+</div>
+{% endfor %}
+</div>
+<div class="col-md-6">
+</div>
+<script>
+function toggleinput(key,vtype) {
+  document.getElementById("value-"+key).hidden = true;
+  document.getElementById("input-"+key).hidden = false;
+  if (vtype=="html") {
+    pell.init({element: document.getElementById("editor-"+key),
+               onChange: html => document.getElementById("hidden-"+key).value=html,
+              });
+    document.getElementById("editor-"+key).getElementsByClassName("pell-content")[0].innerHTML = document.getElementById("htmlvalue-"+key).innerHTML;
+  }
+}
+function imageSrcToDataURI(image) {
+    var canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth; // or 'width' if you want a special/scaled size
+    canvas.height = image.naturalHeight; // or 'height' if you want a special/scaled size
+    canvas.getContext('2d').drawImage(image, 0, 0);
+
+    image.src = canvas.toDataURL('image/jpeg', 1);
+}
+function allimagesToDataURI(node) {
+    for (const img of node.getElementsByTagName('img')) {imageSrcToDataURI(img);}
+}
+</script>
+{% endblock %}

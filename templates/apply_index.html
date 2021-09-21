@@ -1,0 +1,48 @@
+{% extends "baseapply.html" %}
+{% block row %}
+<div class="container">
+<div class="row">
+<div class="col-md-6 col-md-offset-3">
+<h1>Speaker information</h1>
+<p>This is an application to be a "warmup" speaker for one of the main talks. This is a particularly good opportunity for junior researchers to share new results in a 5 minute talk. Some of these applications might be turned into invitations for a full-length talk by the organizers.</p>
+<form id="applyForm" action="/apply/do" method="POST" accept-charset="UTF-8">
+  <div>
+    <div class="form-group">
+        <label for="email">Speaker's email</label>
+	<input type="email" class="form-control" id="email" name="email" value="{{email}}"/>
+    </div>
+    <div class="form-group">
+	<label for="date">Select dates of availability: </label><br>
+	{% for (d,s,t) in slots %}
+	<input type="checkbox" required id="date{{d}}" name="date{{d}}" value="{{d}}"/> {{d}} | {{s}} | {{t}}<br>
+	{% endfor %}
+    </div>
+    <div class="form-group">
+        <label for="speaker">Speaker's name</label>
+	<input type="text" required class="form-control" id="speaker" name="speaker">
+    </div>
+    <div class="form-group">
+        <label for="affiliation">Affiliation</label>
+	<input type="text" required class="form-control" id="affiliation" name="affiliation">
+    </div>
+    <div class="form-group">
+        <label for="title">Talk's title</label>
+	<input type="text" required class="form-control" id="title" name="title">
+    </div>
+    <div class="form-group">
+        <label for="abstract">Abstract</label>
+	<textarea required class="form-control" id="abstract" name="abstract"/></textarea>
+    </div>
+    <div class="form-group">
+        <label for="bio">Speaker's bio</label>
+	<textarea required class="form-control" id="bio" name="bio"/></textarea>
+    </div>
+    <div class="form-group">
+        <label for="bio">Please share publications / posters / recordings showcasing the quality of the work to be presented</label>
+	<textarea required class="form-control" id="previous_records" name="previous_records"/></textarea>
+    </div>
+    <p>This is a short "warmup" talk before the main talk. It will be recorded together with the main talk.</p>
+    <input class="btn btn-primary" type="submit" value="Submit Application">
+  </div>
+</form>
+{% endblock %}

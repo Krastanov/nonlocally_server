@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block body %}
+<nav class="navbar navbar-default">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <a class="navbar-brand" href="/">
+          Speaker Invitation
+      </a>
+    </div>
+    <ul class="nav navbar-nav navbar-right">
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+<div class="row">
+{% block row %}{% endblock %}
+</div>
+</div>
+<footer class="page-footer font-small">
+<hr>
+<div class="text-center" style=""><a href="mailto:stefansconferencesoftware@krastanov.org">SCS - Stefan's Conference Software</a>
+</div>
+</footer>
+{% endblock %}

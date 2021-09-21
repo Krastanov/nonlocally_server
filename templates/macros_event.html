@@ -1,0 +1,17 @@
+{% macro event(date, speaker, affiliation, title, abstract, bio, footer) %}
+<div class="panel panel-default" id="panel-{{date}}">
+  <div class="panel-heading">
+    <p>{{date}}</p>
+    <h2><a href="/event/{{date}}/0">{{speaker}}</a> <span class="badge badge-secondary">{{affiliation}}</span></h2>
+  </div>
+  <div class="panel-body">
+  <h2><a href="/event/{{date}}/0">{{title}}</a></h2>
+  <div style="white-space:pre-wrap">{{abstract}}</div>
+  <h4>Speaker's Bio</h4>
+  <div style="white-space:pre-wrap">{{bio}}</div>
+  </div>
+  <div class="panel-footer">
+  {{footer}}
+  </div>
+</div>
+{% endmacro %}

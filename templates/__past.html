@@ -1,0 +1,26 @@
+{% extends "base_.html" %}
+{% import 'macros_event.html' as event %}
+{% block row %}
+<div class="container">
+<div class="row">
+<div class="col-md-6 col-md-offset-3">
+{% if records %}
+{% for date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link in records %}
+  {% set footer %}
+    {% if recording_link %}
+    <a href="{{recording_link if conf_link else ''}}">video recording</a>
+    {% elif recording_consent %}
+    video recording link will be posted shortly
+    {% else %}
+    this talk was not recorded
+    {% endif %}
+  {% endset %}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, footer) }}
+</div>
+{% endfor %}
+{% else %}
+<p>No scheduled talks in the next week.</p>
+{% endif %}
+</div>
+</div>
+{% endblock %}

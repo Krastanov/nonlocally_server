@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block body %}
+<nav class="navbar navbar-default">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <a class="navbar-brand" href="/admin">
+          SCS - Admin Panel
+      </a>
+    </div>
+    <ul class="nav navbar-nav navbar-right">
+      <li><a href="/admin/config">Configuration</a></li>
+      <li><a href="/">Events</a></li>
+      <li><a href="/admin/invitestatus">Current Invitations</a></li>
+      <li><a href="/admin/invite">Make an Invitation</a></li>
+      <li><a href="/admin/applicationsstatus">Judge Applications</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+<div class="row">
+{% block row %}{% endblock %}
+</div>
+</div>
+<footer class="page-footer font-small">
+<hr>
+<div class="text-center" style=""><a href="mailto:stefansconferencesoftware@krastanov.org">SCS - Stefan's Conference Software</a>
+</div>
+</footer>
+{% endblock %}
