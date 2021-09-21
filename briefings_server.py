@@ -123,7 +123,7 @@ class Apply:
             warmuptalks = set(d[0] for d in c.execute('SELECT date FROM events WHERE warmup!=0'))
         main_talks_dict = {d: (s,t) for d,s,t in maintalks}
         good_dates = set(main_talks_dict.keys()) - warmuptalks
-        good_talks = [(d,*main_talks_dict[d]) for d in good_dates]
+        good_talks = [(d,*main_talks_dict[d]) for d in good_dates if d>datetime.datetime.now()]
         return good_talks
 
     @cherrypy.expose
