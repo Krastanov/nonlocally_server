@@ -113,7 +113,10 @@ class Apply:
     @cherrypy.expose
     def index(self):
         slots = self.available_talks()
-        return templates.get_template('apply_index.html').render(slots=slots)
+        if slots:
+            return templates.get_template('apply_index.html').render(slots=slots)
+        else:
+            return templates.get_template('apply_blank.html').render(content='Currently there are no available slots for "warmup" talks.')
 
     @staticmethod
     def available_talks():

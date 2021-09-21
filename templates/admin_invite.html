@@ -26,4 +26,19 @@
     <input class="btn btn-primary" type="submit" value="Create Invitation">
   </div>
 </form>
+<script>
+    $('#dates').datepicker({
+    format: "yyyy-mm-dd",
+    maxViewMode: 2,
+    clearBtn: true,
+    multidate: true,
+    multidateSeparator: ", ",
+    forceParse: false,
+    todayHighlight: true
+    });
+</script>
+{% block extraloads %}
+<link href="/static/bootstrap-datepicker/css/bootstrap-datepicker3.min.css" rel="stylesheet">
+<script src="/static/bootstrap-datepicker/js/bootstrap-datepicker.min.js"></script>
+{% endblock %}
 {% endblock %}
