@@ -27,11 +27,14 @@ import dateutil.parser
 import rauth
 import requests
 
+
 file_dir = os.path.dirname(os.path.realpath(__file__))
+
 
 logfile = os.path.join(file_dir,'briefings.log')
 logging.basicConfig(filename=logfile,format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',level=logging.DEBUG)
 log = logging.getLogger('briefings')
+
 
 sqlite3.register_adapter(bool, int)
 sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
@@ -64,8 +67,10 @@ def updateconf(k,v):
         c = conn.cursor()
         c.execute('UPDATE config SET value=? WHERE key=?',(v,k))
 
+
 templates = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=os.path.join(file_dir,'templates/')))
 templates.globals['EVENT_NAME'] = conf('event.name')
+
 
 def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[]):
     log.debug('attempting to send email "%s" <%s>'%(subject, emailaddr))
@@ -91,6 +96,23 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
     server.send_message(msg)
     server.quit()
 
+
+ZOOM_TEMPLATE = {
+                 #"topic": 'Meeting',
+                 "type": 2,
+                 #"start_time": "",
+                 "duration": 240,
+                 "timezone": 'America/New_York',
+                 "settings": {
+                   "host_video": False,
+                   "participant_video": False,
+                   "join_before_host": False,
+                   "mute_upon_entry": True,
+                   "waiting_room": True
+                 }
+               }
+
+
 class Root:
     @cherrypy.expose
     def index(self):
@@ -110,9 +132,11 @@ class Root:
     def event(self, date, warmup):
         try:
             with conn() as c:
+                warmup = warmup and warmup!='False'
                 talk = c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (dateutil.parser.isoparse(date), warmup)).fetchone()
             future = talk[0]>datetime.datetime.now()
         except:
+            log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
         return templates.get_template('__event.html').render(talk=talk, future=future)
 
@@ -163,7 +187,6 @@ class Apply:
         return templates.get_template('apply_blank.html').render(content='Submission successful! You will receive an email with a decision, depending on availability, before the talk.')
 
 
-
 @cherrypy.popargs('uuid')
 class Invite:
     @cherrypy.expose
@@ -174,9 +197,10 @@ class Invite:
                 c.execute('SELECT email, warmup FROM invitations WHERE uuid=?;', (uuid,))
                 email, warmup  = c.fetchone()
         except:
+            log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
         good_dates, confirmed_date = self.available_dates(uuid)
-        args = 'speaker, affiliation, bio, title, abstract, recording_consent'
+        args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link'
         if confirmed_date:
             with conn() as c:
                 c = c.cursor()
@@ -238,12 +262,28 @@ class Invite:
                       data)
             c.execute('UPDATE invitations SET confirmed_date=? WHERE uuid=?',
                       (data[0],uuid))
+
+        # Zoom
+        if not confirmed_date:
+            zoom_meet_config = {'start_time':str(datetime.datetime.now()),
+                                'topic': conf('event.name'),
+                                **ZOOM_TEMPLATE}
+            try:
+                url = Zoom.post('/meetings', data=zoom_meet_config).json()['join_url']
+                with conn() as c:
+                    c = c.cursor()
+                    c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
+            except ValueError:
+                log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
+
         # Email
         text_content = subject = '%s, you submitted your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+uuid
-        html_content = 'You can view updated information about your talk at <a href="%s">%s</a>. <strong>Keep this link private</strong>.'%(url, url) 
+        public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
+        html_content = 'You can view updated information about your talk at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a>'%(url, url, public_url, public_url) 
         send_email(text_content, html_content, data_dict['email'], subject)
-        return templates.get_template('invite_blank.html').render(content='Submission successful! You can edit the talk details until the date of the talk at <a href="/invite/%s">the same link</a>. <strong>Keep this link private.</strong>'%uuid)
+
+        return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
 
 
 def add_default_time_to_date(date):
@@ -288,7 +328,8 @@ class Admin:
         try:
             dates = [add_default_time_to_date(dateutil.parser.isoparse(_.strip()))
                      for _ in kwargs['dates'].split(',')]
-        except ValueError:
+        except:
+            log.error('Could not parse dates %s'%(dates))
             return templates.get_template('admin_blank.html').render(content='There was a problem with the parsing of the dates! Try again!')
         warmup = 'warmup' in kwargs
         send = 'send' in kwargs
@@ -297,7 +338,8 @@ class Admin:
             with conn() as c:
                 c.execute('INSERT INTO invitations (uuid, email, dates, warmup, confirmed_date) VALUES (?, ?, ?, ?, NULL)',
                           (uid, email, '|'.join(repr(d) for d in dates), warmup))
-        except ValueError:
+        except:
+            log.error('Could not insert '%((uid, email, '|'.join(repr(d) for d in dates), warmup),))
             return templates.get_template('admin_blank.html').render(content='There was a problem with the database! Try again!')
         # Email
         text_content = subject = conf('invitations.email_subject_line')
@@ -312,6 +354,7 @@ class Admin:
                 send_email(text_content, html_content, email, subject)
                 mail_note = 'The following email was sent to %s:'%email_link
             except:
+                log.error('Email failed to send to %s',email)
                 mail_note = 'The email to %s failed to send. Contact the admin to investigate. Here is the email content if you prefer to send it manually:'%email_link
             return templates.get_template('admin_blank.html').render(content='The invite is available at <a href="/invite/%s">/invite/%s</a>. %s<div>%s</div>'%(uid,uid,mail_note,html_panel))
         else:
@@ -342,9 +385,17 @@ class Admin:
         return templates.get_template('admin_blank.html').render(content='Judging applications is not implemented yet!')
 
     @cherrypy.expose
-    def testzoom(self):
-        j = Zoom.get('').json()
-        content = '<pre>%s</pre>'%json.dumps(j)
+    def testzoom(self, test=None):
+        if test=='make_meeting':
+            zoom_meet_config = {'start_time':str(datetime.datetime.now()),
+                                'topic': 'Test Meeting '+conf('event.name'),
+                                **ZOOM_TEMPLATE}
+            j = Zoom.post('/meetings', data=zoom_meet_config).json()
+            zoom_meet_config = {'start_time':str(datetime.datetime.now()), **ZOOM_TEMPLATE}
+            j = Zoom.post('/meetings', data=zoom_meet_config).json()
+        else:
+            j = Zoom.get('').json()
+        content = '<pre>%s</pre>'%json.dumps(j, indent=4)
         return templates.get_template('admin_blank.html').render(content=content)
 
 
@@ -401,6 +452,12 @@ class Zoom:
         base_url='https://api.zoom.us/v2/users/me'
         s = Zoom.get_session()
         return s.get(base_url+r, params=params)
+
+    @staticmethod 
+    def post(r, data={}):
+        base_url='https://api.zoom.us/v2/users/me'
+        s = Zoom.get_session()
+        return s.post(base_url+r, json=data)
 
     @cherrypy.expose
     def receive_code(self, code=None):
