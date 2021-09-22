@@ -354,7 +354,7 @@ def auth(realm,u,p):
 if __name__ == '__main__':
     log.info('server starting')
     cherrypy.config.update({'server.socket_host'     : '127.0.0.1',
-                            'server.socket_port'     : 12347,
+                            'server.socket_port'     : conf('server.port'),
                             'tools.encode.on'        : True,
                             #'environment'            : 'production',
                             'tools.sessions.on'      : True,
