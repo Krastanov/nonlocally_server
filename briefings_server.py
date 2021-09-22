@@ -24,6 +24,8 @@ import cherrypy
 import jinja2
 import dateutil
 import dateutil.parser
+import rauth
+import requests
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -55,6 +57,12 @@ def conf(k):
         return v=='True'
     else:
         raise ValueError('Unknown Value Type')
+
+def updateconf(k,v):
+    conn = sqlite3.connect(os.path.join(file_dir,'config.sqlite'))
+    with conn:
+        c = conn.cursor()
+        c.execute('UPDATE config SET value=? WHERE key=?',(v,k))
 
 templates = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=os.path.join(file_dir,'templates/')))
 templates.globals['EVENT_NAME'] = conf('event.name')
@@ -333,6 +341,12 @@ class Admin:
     def judgle(self, uuid):
         return templates.get_template('admin_blank.html').render(content='Judging applications is not implemented yet!')
 
+    @cherrypy.expose
+    def testzoom(self):
+        j = Zoom.get('').json()
+        content = '<pre>%s</pre>'%json.dumps(j)
+        return templates.get_template('admin_blank.html').render(content=content)
+
 
 class Dev:
     @cherrypy.expose
@@ -344,6 +358,63 @@ class Dev:
         import subprocess
         lines = subprocess.Popen(['tail','-n',1000,logfile], stdout=subprocess.PIPE).stdout.readlines()
         return '<pre>%s</pre>'%'\n'.join(lines)
+
+
+class Zoom:
+    @cherrypy.expose
+    def index(self):
+        return "Zoom integration is controlled from the admin panel."
+
+    @staticmethod
+    def get_token(code=None):
+        clientid = conf('zoom.clientid')
+        clientsecret = conf('zoom.clientsecret')
+        redirecturl = 'https://'+'nonlocalbriefings.krastanov.org'+'/zoom/receive_code'
+        #redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        refresh_token = conf('zoom.refreshtoken')
+        access_token = conf('zoom.accesstoken')
+        if code:
+            grant_type = 'grant_type=authorization_code&code='+code
+        else:
+            grant_type = 'grant_type=refresh_token&refresh_token='+refresh_token
+        url = 'https://zoom.us/oauth/token?' + grant_type + '&client_id=' + clientid + '&client_secret=' + clientsecret + '&redirect_uri=' + redirecturl
+        r = requests.post(url)
+        j = r.json()
+        updateconf('zoom.accesstoken', j.get('access_token', access_token))
+        updateconf('zoom.refreshtoken', j.get('refresh_token',refresh_token))
+        return j
+
+    @staticmethod
+    def get_session():
+        Zoom.get_token() # TODO refresh only on errors
+        clientid = conf('zoom.clientid')
+        clientsecret = conf('zoom.clientsecret')
+        access_token = conf('zoom.accesstoken')
+        session = rauth.OAuth2Session(
+           client_id=clientid,
+           client_secret=clientsecret,
+           access_token=access_token)
+        return session
+
+    @staticmethod 
+    def get(r, params={}):
+        base_url='https://api.zoom.us/v2/users/me'
+        s = Zoom.get_session()
+        return s.get(base_url+r, params=params)
+
+    @cherrypy.expose
+    def receive_code(self, code=None):
+        log.debug('Receiving a zoom oauth redirect with code '+str(code))
+        clientid = conf('zoom.clientid')
+        clientsecret = conf('zoom.clientsecret')
+        redirecturl = 'https://'+'nonlocalbriefings.krastanov.org'+'/zoom/receive_code'
+        #redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        if code:
+            j = self.get_token(code=code)
+            content = 'Success! <pre>%s</pre>'%json.dumps(j, indent=4)
+            return templates.get_template('admin_blank.html').render(content=content)
+        else:
+            raise cherrypy.HTTPRedirect('https://zoom.us/oauth/authorize?response_type=code&client_id=' + clientid + '&redirect_uri=' + redirecturl)
 
 
 def auth(realm,u,p):
@@ -377,6 +448,7 @@ if __name__ == '__main__':
     cherrypy.tree.mount(Apply(), '/apply', {})
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
     cherrypy.tree.mount(Dev(), '/dev', password_conf)
+    cherrypy.tree.mount(Zoom(), '/zoom', {})
     cherrypy.engine.start()
     cherrypy.engine.block()
     log.info('server stopping')
