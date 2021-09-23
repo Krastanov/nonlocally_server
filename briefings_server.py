@@ -132,7 +132,7 @@ class Root:
     def event(self, date, warmup):
         try:
             with conn() as c:
-                warmup = warmup and warmup!='False'
+                warmup = warmup and not (warmup=='False' or warmup=='0')
                 talk = c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (dateutil.parser.isoparse(date), warmup)).fetchone()
             future = talk[0]>datetime.datetime.now()
         except:
