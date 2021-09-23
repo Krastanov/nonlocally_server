@@ -1,3 +1,5 @@
+"""Add events to database from a csv file."""
+
 import csv
 import datetime
 import itertools

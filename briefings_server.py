@@ -269,7 +269,7 @@ class Invite:
                                 'topic': conf('event.name'),
                                 **ZOOM_TEMPLATE}
             try:
-                url = Zoom.post('/meetings', data=zoom_meet_config).json()['join_url']
+                url = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()['join_url']
                 with conn() as c:
                     c = c.cursor()
                     c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
@@ -390,11 +390,11 @@ class Admin:
             zoom_meet_config = {'start_time':str(datetime.datetime.now()),
                                 'topic': 'Test Meeting '+conf('event.name'),
                                 **ZOOM_TEMPLATE}
-            j = Zoom.post('/meetings', data=zoom_meet_config).json()
+            j = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()
             zoom_meet_config = {'start_time':str(datetime.datetime.now()), **ZOOM_TEMPLATE}
-            j = Zoom.post('/meetings', data=zoom_meet_config).json()
+            j = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()
         else:
-            j = Zoom.get('').json()
+            j = Zoom.get('/users/me').json()
         content = '<pre>%s</pre>'%json.dumps(j, indent=4)
         return templates.get_template('admin_blank.html').render(content=content)
 
@@ -449,15 +449,21 @@ class Zoom:
 
     @staticmethod 
     def get(r, params={}):
-        base_url='https://api.zoom.us/v2/users/me'
+        base_url='https://api.zoom.us/v2'
         s = Zoom.get_session()
         return s.get(base_url+r, params=params)
 
     @staticmethod 
     def post(r, data={}):
-        base_url='https://api.zoom.us/v2/users/me'
+        base_url='https://api.zoom.us/v2'
         s = Zoom.get_session()
         return s.post(base_url+r, json=data)
+
+    @staticmethod # TODO not tested
+    def patch(r, data={}):
+        base_url='https://api.zoom.us/v2'
+        s = Zoom.get_session()
+        return s.patch(base_url+r, json=data)
 
     @cherrypy.expose
     def receive_code(self, code=None):
