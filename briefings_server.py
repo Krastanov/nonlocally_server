@@ -501,12 +501,17 @@ if __name__ == '__main__':
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'static'),
                              }}
+    video_conf = {'/video':{
+                              'tools.staticdir.on'   : True,
+                              'tools.staticdir.dir'  : '',
+                              'tools.staticdir.root' : conf('zoom.recdownloads'),
+                             }}
     password_conf = {'/':{
                           'tools.auth_basic.on': True,
                           'tools.auth_basic.realm': 'engday',
                           'tools.auth_basic.checkpassword': auth,
                          }}
-    cherrypy.tree.mount(Root(), '/', static_conf)
+    cherrypy.tree.mount(Root(), '/', {**static_conf,**video_conf})
     cherrypy.tree.mount(Invite(), '/invite', {})
     cherrypy.tree.mount(Apply(), '/apply', {})
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
