@@ -1,4 +1,4 @@
-{% macro event(date, speaker, affiliation, title, abstract, bio, footer) %}
+{% macro event(date, speaker, affiliation, title, abstract, bio, warmup, showvideo, footer) %}
 <div class="panel panel-default" id="panel-{{date}}">
   <div class="panel-heading">
     <p>{{date}}</p>
@@ -10,6 +10,11 @@
   <h4>Speaker's Bio</h4>
   <div style="white-space:pre-wrap">{{bio}}</div>
   </div>
+  {% if showvideo %}
+  <div style="margin:1em;">
+  <video controls style="width:100%" src="/video/{{date}}-{{warmup}}.mp4" preload="none"></video>
+  </div>
+  {% endif %}
   <div class="panel-footer">
   {{footer}}
   </div>
