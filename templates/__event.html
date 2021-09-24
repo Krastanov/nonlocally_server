@@ -4,7 +4,7 @@
 <div class="container">
 <div class="row">
 <div class="col-md-6 col-md-offset-3">
-{% for date, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link in [talk] %}
+{% for date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link in [talk] %}
   {% set footer %}
     {% if future %}
       {% if conf_link %}
@@ -16,13 +16,13 @@
       {% if recording_link %}
       <a href="{{recording_link if conf_link else ''}}">video recording</a>
       {% elif recording_consent %}
-      video recording link will be posted shortly
+      <!--video recording link will be posted shortly-->
       {% else %}
       this talk was not recorded
       {% endif %}
     {% endif %}
   {% endset %}
-  {{ event.event(date, speaker, affiliation, title, abstract, bio, footer) }}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent, footer) }}
 {% endfor %}
 </div>
 </div>

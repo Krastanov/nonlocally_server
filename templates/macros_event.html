@@ -2,18 +2,45 @@
 <div class="panel panel-default" id="panel-{{date}}">
   <div class="panel-heading">
     <p>{{date}}</p>
-    <h2><a href="/event/{{date}}/0">{{speaker}}</a> <span class="badge badge-secondary">{{affiliation}}</span></h2>
+    <h2><a href="/event/{{date}}/{{warmup}}">{{speaker}}</a> <span class="badge badge-secondary">{{affiliation}}</span></h2>
   </div>
   <div class="panel-body">
-  <h2><a href="/event/{{date}}/0">{{title}}</a></h2>
+  <h2><a href="/event/{{date}}/{{warmup}}">{{title}}</a></h2>
   <div style="white-space:pre-wrap">{{abstract}}</div>
   <h4>Speaker's Bio</h4>
   <div style="white-space:pre-wrap">{{bio}}</div>
   </div>
+  {% if warmup %}
+  <strong>This was a short "warmup" talk for <a href="/event/{{date}}/{{warmup}}">another talk</a>.</strong>
+  {% else %}
   {% if showvideo %}
   <div style="margin:1em;">
-  <video controls style="width:100%" src="/video/{{date}}-{{warmup}}.mp4" preload="none"></video>
+  <video id="video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}" controls style="width:100%" preload="none"></video>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+  (function (){
+  var video = document.getElementById('video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}');
+  var videoSrc = '/video/hls/{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}.m3u8';
+  var videoSrcmp4="/video/{{date}}-{{warmup+0}}.mp4";
+  //
+  // First check for native browser HLS support
+  //
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = videoSrc;
+    //
+    // If no native HLS support, check if HLS.js is supported
+    //
+  } else if (Hls.isSupported()) {
+    var hls = new Hls();
+    hls.loadSource(videoSrc);
+    hls.attachMedia(video);
+  } else {
+    video.src = videoSrcmp4;
+  }
+  })();
+</script>
   </div>
+  {% endif %}
   {% endif %}
   <div class="panel-footer">
   {{footer}}
