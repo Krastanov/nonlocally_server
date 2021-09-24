@@ -15,7 +15,7 @@
   {% else %}
   {% if showvideo %}
   <div style="margin:1em;">
-  <video id="video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}" controls style="width:100%" preload="none"></video>
+  <video id="video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}" controls style="width:100%" preload="none" poster="/video/poster/{{date}}-{{warmup+0}}.jpg"></video>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
   (function (){
