@@ -16,20 +16,14 @@
   {% if showvideo %}
   <div style="margin:1em;">
   <video id="video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}" controls style="width:100%" preload="none" poster="/video/poster/{{date}}-{{warmup+0}}.jpg"></video>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="/static/hls.js"></script>
 <script>
   (function (){
   var video = document.getElementById('video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}');
   var videoSrc = '/video/hls/{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}.m3u8';
   var videoSrcmp4="/video/{{date}}-{{warmup+0}}.mp4";
-  //
-  // First check for native browser HLS support
-  //
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = videoSrc;
-    //
-    // If no native HLS support, check if HLS.js is supported
-    //
   } else if (Hls.isSupported()) {
     var hls = new Hls();
     hls.loadSource(videoSrc);
