@@ -26,6 +26,10 @@ import dateutil
 import dateutil.parser
 import rauth
 import requests
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -381,8 +385,12 @@ class Admin:
         return templates.get_template('admin_blank.html').render(content=content)
 
     @cherrypy.expose
-    def judgle(self, uuid):
+    def judge(self, uuid):
         return templates.get_template('admin_blank.html').render(content='Judging applications is not implemented yet!')
+
+    @cherrypy.expose
+    def authzoom(self):
+        Zoom.start_auth()
 
     @cherrypy.expose
     def testzoom(self, test=None):
@@ -397,6 +405,10 @@ class Admin:
             j = Zoom.get('/users/me').json()
         content = '<pre>%s</pre>'%json.dumps(j, indent=4)
         return templates.get_template('admin_blank.html').render(content=content)
+
+    @cherrypy.expose
+    def authgoogle(self):
+        Google.start_auth()
 
 
 class Dev:
@@ -420,8 +432,7 @@ class Zoom:
     def get_token(code=None):
         clientid = conf('zoom.clientid')
         clientsecret = conf('zoom.clientsecret')
-        redirecturl = 'https://'+'nonlocalbriefings.krastanov.org'+'/zoom/receive_code'
-        #redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
         refresh_token = conf('zoom.refreshtoken')
         access_token = conf('zoom.accesstoken')
         if code:
@@ -465,19 +476,62 @@ class Zoom:
         s = Zoom.get_session()
         return s.patch(base_url+r, json=data)
 
-    @cherrypy.expose
-    def receive_code(self, code=None):
-        log.debug('Receiving a zoom oauth redirect with code '+str(code))
+    @staticmethod
+    def start_auth():
         clientid = conf('zoom.clientid')
         clientsecret = conf('zoom.clientsecret')
-        redirecturl = 'https://'+'nonlocalbriefings.krastanov.org'+'/zoom/receive_code'
+        redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        raise cherrypy.HTTPRedirect('https://zoom.us/oauth/authorize?response_type=code&client_id=' + clientid + '&redirect_uri=' + redirecturl)
+
+    @cherrypy.expose
+    def receive_code(self, code=None): # TODO the first step, the trigger, should not be publically accessbile like this
+        clientid = conf('zoom.clientid')
+        clientsecret = conf('zoom.clientsecret')
+        redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        j = self.get_token(code=code)
+        content = 'Success!'
+        return templates.get_template('admin_blank.html').render(content=content)
+
+
+class Google:
+    scopes=['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive']
+    @staticmethod
+    def getflow():
+        redirecturl = 'https://'+'nonlocalbriefings.krastanov.org'+'/google/receive_code'
         #redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
-        if code:
-            j = self.get_token(code=code)
-            content = 'Success! <pre>%s</pre>'%json.dumps(j, indent=4)
-            return templates.get_template('admin_blank.html').render(content=content)
-        else:
-            raise cherrypy.HTTPRedirect('https://zoom.us/oauth/authorize?response_type=code&client_id=' + clientid + '&redirect_uri=' + redirecturl)
+        client_config = json.loads(conf('google.client_secrets'))
+        flow = Flow.from_client_config(client_config, scopes=Google.scopes, redirect_uri=redirecturl)
+        return flow
+
+    @cherrypy.expose
+    def index(self):
+        return "Google integration is controlled from the admin panel."
+
+    @staticmethod
+    def start_auth():
+        flow = Google.getflow()
+        passthrough_val = hashlib.sha256(os.urandom(1024)).hexdigest()
+        auth_url, state = flow.authorization_url(access_type='offline',state=passthrough_val,include_granted_scopes='true')
+        raise cherrypy.HTTPRedirect(auth_url)
+        
+    @cherrypy.expose
+    def receive_code(self, **kwargs):
+        flow = self.getflow()
+        flow.fetch_token(code=kwargs['code']) # TODO you should check passthrough_val...
+        j = flow.credentials.to_json()
+        updateconf('google.credential_tokens',j)
+        content = 'Success!'
+        return templates.get_template('admin_blank.html').render(content=content)
+
+    @staticmethod
+    def getcreds():
+        creds = json.loads(conf('google.credential_tokens'))
+        cred = Credentials.from_authorized_user_info(info, scopes=self.scopes)
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            j = creds.to_json()
+            updateconf('google.credential_tokens',j)
+        return creds
 
 
 def auth(realm,u,p):
@@ -517,6 +571,7 @@ if __name__ == '__main__':
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
     cherrypy.tree.mount(Dev(), '/dev', password_conf)
     cherrypy.tree.mount(Zoom(), '/zoom', {})
+    cherrypy.tree.mount(Google(), '/google', {})
     cherrypy.engine.start()
     cherrypy.engine.block()
     log.info('server stopping')
