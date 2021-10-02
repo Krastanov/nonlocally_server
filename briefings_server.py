@@ -201,7 +201,7 @@ class Invite:
                 c.execute('SELECT email, warmup FROM invitations WHERE uuid=?;', (uuid,))
                 email, warmup  = c.fetchone()
         except:
-            log.error('Attempted opening unknown talk %s %s'%(date, warmup))
+            log.error('Attempted opening unknown invite %s %s %s'%(uuid, email, warmup))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
         good_dates, confirmed_date = self.available_dates(uuid)
         args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link'
