@@ -14,7 +14,7 @@
       {% endif %}
     {% else %}
       {% if recording_link %}
-      <a href="{{recording_link if conf_link else ''}}">video recording</a>
+      <a href="{{recording_link if recording_link else ''}}">video recording</a>
       {% elif recording_consent %}
       <!--video recording link will be posted shortly-->
       {% else %}
@@ -22,7 +22,7 @@
       {% endif %}
     {% endif %}
   {% endset %}
-  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent, footer) }}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent and not future, footer) }}
 {% endfor %}
 </div>
 </div>
