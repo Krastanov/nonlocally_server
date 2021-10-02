@@ -123,7 +123,7 @@ class Root:
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link FROM events WHERE warmup=0 ORDER BY date ASC'))
         records = [t for t in all_talks if t[0]>datetime.datetime.now()]
-        return templates.get_template('__index.html').render(records=records)
+        return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'))
 
     @cherrypy.expose
     def past(self):
