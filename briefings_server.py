@@ -267,10 +267,11 @@ class Invite:
             c.execute('UPDATE invitations SET confirmed_date=? WHERE uuid=?',
                       (data[0],uuid))
 
-        # Zoom
+        # Zoom and Calendar and Drive
         if not confirmed_date:
-            zoom_meet_config = {'start_time':str(datetime.datetime.now()),
-                                'topic': conf('event.name'),
+            # Zoom
+            zoom_meet_config = {'start_time': data_dict['date'].isoformat('T'),
+                                'topic': conf('event.name')+": "+data_dict['speaker'],
                                 **ZOOM_TEMPLATE}
             try:
                 url = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()['join_url']
@@ -279,7 +280,20 @@ class Invite:
                     c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
             except ValueError:
                 log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
-
+            # Calendar
+            creds = Google.getcreds()
+            with build('calendar','v3',credentials=creds) as service:
+                title = data_dict["speaker"]+": "+data_dict["title"]
+                j = service.events().quickAdd(calendarId=conf('google.calendarid'),text=title).execute()
+                event_id = j["id"]
+                date = data_dict["date"]
+                j["start"]["dateTime"] = date.isoformat('T')
+                j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
+                nj = {
+                        "start": j["start"],
+                        "end": j["end"],
+                        "description": data_dict["abstract"]}
+                j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
         # Email
         text_content = subject = '%s, you submitted your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+uuid
@@ -410,6 +424,30 @@ class Admin:
     def authgoogle(self):
         Google.start_auth()
 
+    @cherrypy.expose
+    def testgoogle(self, test=None):
+        creds = Google.getcreds()
+        if test=='calendar':
+            with build('calendar','v3',credentials=creds) as service:
+                j = service.calendars().get(calendarId=conf('google.calendarid')).execute()
+        elif test=='createevent':
+            with build('calendar','v3',credentials=creds) as service:
+                j = service.events().quickAdd(calendarId=conf('google.calendarid'),text="Internal meeting").execute()
+                event_id = j["id"]
+                date = datetime.datetime.now()
+                j["start"]["dateTime"] = date.isoformat('T')
+                j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
+                nj = {
+                        "start": j["start"],
+                        "end": j["end"],
+                        "description": "Internal meeting"}
+                j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
+        else:
+            with build('drive','v3',credentials=creds) as service:
+                j = service.about().get(fields='*').execute()
+        content = '<pre>%s</pre>'%json.dumps(j, indent=4)
+        return templates.get_template('admin_blank.html').render(content=content)
+
 
 class Dev:
     @cherrypy.expose
@@ -484,7 +522,7 @@ class Zoom:
         raise cherrypy.HTTPRedirect('https://zoom.us/oauth/authorize?response_type=code&client_id=' + clientid + '&redirect_uri=' + redirecturl)
 
     @cherrypy.expose
-    def receive_code(self, code=None): # TODO the first step, the trigger, should not be publically accessbile like this
+    def receive_code(self, code):
         clientid = conf('zoom.clientid')
         clientsecret = conf('zoom.clientsecret')
         redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
@@ -497,8 +535,7 @@ class Google:
     scopes=['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive']
     @staticmethod
     def getflow():
-        redirecturl = 'https://'+'nonlocalbriefings.krastanov.org'+'/google/receive_code'
-        #redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
         client_config = json.loads(conf('google.client_secrets'))
         flow = Flow.from_client_config(client_config, scopes=Google.scopes, redirect_uri=redirecturl)
         return flow
@@ -525,8 +562,8 @@ class Google:
 
     @staticmethod
     def getcreds():
-        creds = json.loads(conf('google.credential_tokens'))
-        cred = Credentials.from_authorized_user_info(info, scopes=self.scopes)
+        tokens = json.loads(conf('google.credential_tokens'))
+        creds = Credentials.from_authorized_user_info(tokens, scopes=Google.scopes)
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
             j = creds.to_json()
