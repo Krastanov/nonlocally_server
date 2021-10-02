@@ -567,7 +567,8 @@ class Google:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
             j = creds.to_json()
-            updateconf('google.credential_tokens',j)
+            tokens.update(json.loads(j))
+            updateconf('google.credential_tokens',json.dumps(tokens))
         return creds
 
 
