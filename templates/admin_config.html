@@ -18,7 +18,7 @@
   </div>
   <div id="input-{{k}}" hidden>
     {% if vtype in ["str", "str[]", "int"]%}
-      <form class="form" action="update/{{k}}"><div class="form-group"><input type="text" class="form-control" name="value" value="{{v}}"></div><button type="submit" class="btn btn-danger">Submit</button></form>
+      <form class="form" action="update/{{k}}"><div class="form-group"><input type="text" class="form-control" name="value" value="{{v|e}}"></div><button type="submit" class="btn btn-danger">Submit</button></form>
     {% elif vtype=="html" %}
       <div id="editor-{{k}}"></div><form action="update/{{k}}"><input type="hidden" id="hidden-{{k}}" name="value" value=""><button type="submit" class="btn btn-danger">Submit</button></form>
     {% elif vtype=="bool" %}
