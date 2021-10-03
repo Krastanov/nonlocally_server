@@ -76,14 +76,14 @@ templates = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=os.path
 templates.globals['EVENT_NAME'] = conf('event.name')
 
 
-def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[]):
+def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[], cc=[]):
     log.debug('attempting to send email "%s" <%s>'%(subject, emailaddr))
     msg = email.message.EmailMessage()
     msg.set_content(text_content)
     msg['Subject'] = subject
     msg['From'] = email.headerregistry.Address(conf('email.from_display'), conf('email.from_user'), conf('email.from'))
     msg['To'] = emailaddr
-    msg['Cc'] = conf('email.cc')
+    msg['Cc'] = ','.join([conf('email.cc')]+cc)
 
     msg.add_alternative(html_content, subtype='html')
     for pngbytes, cid in pngbytes_cids:
@@ -198,8 +198,8 @@ class Invite:
         try:
             with conn() as c:
                 c = c.cursor()
-                c.execute('SELECT email, warmup FROM invitations WHERE uuid=?;', (uuid,))
-                email, warmup  = c.fetchone()
+                c.execute('SELECT email, warmup, host, host_email FROM invitations WHERE uuid=?;', (uuid,))
+                email, warmup, host, host_email  = c.fetchone()
         except:
             log.error('Attempted opening unknown invite %s %s %s'%(uuid, email, warmup))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
@@ -215,7 +215,7 @@ class Invite:
             old_data = dict(zip(args_s, data))
         else:
             old_data = dict()
-        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data)
+        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email)
 
     @staticmethod
     def available_dates(uuid):
@@ -257,6 +257,11 @@ class Invite:
             return templates.get_template('invite_blank.html').render(content='There was a problem with reserving the date! Please contact whomever sent you the invite!')
         with conn() as c:
             c = c.cursor()
+            args += ', host, host_email'
+            placeholders += ',?,?'
+            c.execute('SELECT email, warmup, host, host_email FROM invitations WHERE uuid=?;', (uuid,))
+            email, warmup, host, host_email  = c.fetchone()
+            data.extend([host, host_email])
             c.execute("""INSERT INTO events (%s) VALUES (%s)
                          ON CONFLICT(date, warmup)
                          DO UPDATE SET %s"""%(
@@ -298,8 +303,8 @@ class Invite:
         text_content = subject = '%s, you submitted your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+uuid
         public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
-        html_content = 'You can view updated information about your talk at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a>'%(url, url, public_url, public_url) 
-        send_email(text_content, html_content, data_dict['email'], subject)
+        html_content = 'You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a>'%(url, url, public_url, public_url) 
+        send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
 
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
 
@@ -351,13 +356,15 @@ class Admin:
             return templates.get_template('admin_blank.html').render(content='There was a problem with the parsing of the dates! Try again!')
         warmup = 'warmup' in kwargs
         send = 'send' in kwargs
+        host = kwargs.get('hname')
+        host_email = kwargs.get('hemail')
         uid = str(uuid.uuid4())
         try:
             with conn() as c:
-                c.execute('INSERT INTO invitations (uuid, email, dates, warmup, confirmed_date) VALUES (?, ?, ?, ?, NULL)',
-                          (uid, email, '|'.join(repr(d) for d in dates), warmup))
+                c.execute('INSERT INTO invitations (uuid, email, dates, warmup, host, host_email, confirmed_date) VALUES (?, ?, ?, ?, ?, ?, NULL)',
+                          (uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email))
         except:
-            log.error('Could not insert '%((uid, email, '|'.join(repr(d) for d in dates), warmup),))
+            log.error('Could not insert '%((uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email),))
             return templates.get_template('admin_blank.html').render(content='There was a problem with the database! Try again!')
         # Email
         text_content = subject = conf('invitations.email_subject_line')

@@ -16,6 +16,8 @@ CREATE TABLE events
  recording_consent BOOLEAN NOT NULL,
  recording_link TEXT,
  previous_records TEXT,
+ host TEXT,
+ host_email TEXT,
  PRIMARY KEY (date, warmup)
 );
 
@@ -25,6 +27,8 @@ CREATE TABLE invitations
  dates TEXT NOT NULL, -- TODO implement an array converter in python
  warmup BOOLEAN NOT NULL,
  confirmed_date TIMESTAMP,
+ host TEXT,
+ host_email TEXT,
  FOREIGN KEY(confirmed_date, warmup) REFERENCES events(date, warmup)
  -- TODO maybe CHECK that dates has the correct format
 );
