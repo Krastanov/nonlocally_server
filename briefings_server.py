@@ -123,7 +123,7 @@ class Root:
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link FROM events WHERE warmup=0 ORDER BY date ASC'))
         records = [t for t in all_talks if t[0]>datetime.datetime.now()]
-        return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'))
+        return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'), banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'))
 
     @cherrypy.expose
     def past(self):
@@ -593,7 +593,12 @@ if __name__ == '__main__':
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'static'),
                              }}
-    video_conf = {'/video':{
+    customfiles_conf = {'/customfiles':{# Almost certainly this should be overwritten by your nginx config.
+                              'tools.staticdir.on'   : True,
+                              'tools.staticdir.dir'  : '',
+                              'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'customfiles'),
+                             }}
+    video_conf = {'/video':{# Almost certainly this should be overwritten by your nginx config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : conf('zoom.recdownloads'),
@@ -603,7 +608,7 @@ if __name__ == '__main__':
                           'tools.auth_basic.realm': 'engday',
                           'tools.auth_basic.checkpassword': auth,
                          }}
-    cherrypy.tree.mount(Root(), '/', {**static_conf,**video_conf})
+    cherrypy.tree.mount(Root(), '/', {**static_conf,**video_conf,**customfiles_conf})
     cherrypy.tree.mount(Invite(), '/invite', {})
     cherrypy.tree.mount(Apply(), '/apply', {})
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
