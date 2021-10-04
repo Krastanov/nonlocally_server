@@ -1,6 +1,9 @@
 {% extends "base.html" %}
+{% block extraloads %}
+<base target="_blank" />
+{% endblock %}
 {% block body %}
-<div class="container">
+<div class="container-fluid">
 <div class="row">
 {% block row %}{% endblock %}
 </div>
