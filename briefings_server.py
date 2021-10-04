@@ -283,7 +283,7 @@ class Invite:
                 with conn() as c:
                     c = c.cursor()
                     c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
-            except ValueError:
+            except:
                 log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
             # Calendar
             creds = Google.getcreds()
