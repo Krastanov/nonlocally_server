@@ -1,0 +1,24 @@
+{% extends "base_iframe.html" %}
+{% import 'macros_event.html' as event %}
+{% block row %}
+<div class="container">
+<div class="row">
+<div class="col-md-12">
+{% if records %}
+{% for date, speaker, affiliation, title, abstract, bio, conf_link in records %}
+  {% set footer %}
+    {% if conf_link %}
+    <a href="{{conf_link if conf_link else ''}}">video conference link</a>
+    {% else %}
+    video conference link will be posted shortly
+    {% endif %}
+  {% endset %}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, 0, False, footer) }}
+{% endfor %} 
+{% else %}
+<p>No scheduled talks in the next week.</p>
+{% endif %}
+</div>
+</div>
+</div>
+{% endblock %}
