@@ -1,10 +1,27 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<title>{% block title %}{% endblock %}</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8" />
+<meta name="generator" content="StefansConferenceSoftware" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+
+<link rel="apple-touch-icon-precomposed" href="/customfiles/fav180.png">
+<link rel="icon" href="/customfiles/fav196.png">
+
+<meta property="og:title" content="{% block title %}{{EVENT_NAME | e}}{% endblock %}" />
+<meta property="og:type" content="website" />
+<meta property="og:description" content="{% block description %}{{DESCRIPTION}}{% endblock %}" />
+<!--<meta property="og:image" content="https://...jpg" />-->
+
+<link rel="image_src" href="https://spinwearables.com/hanging.jpg" />
+<meta name="keywords" content="spinwheel, education, STEM, outreach, science, engineering day, electronics, computer science, physics" />
+
+<title>{{ self.title() }}</title>
+
 <link rel="stylesheet" href="/static/bootstrap.min.css">
 <link rel="stylesheet" href="/static/pell.min.css">
+
 <script src="/static/jquery.min.js"></script>
 <script src="/static/underscore.min.js"></script>
 <script src="/static/intercooler.min.js"></script>
@@ -18,9 +35,12 @@ $.ajaxSetup({
   timeout:1000
 });
 </script>
+
 {% block extraloads %}{% endblock %}
 </head>
+
 <body>
 {% block body %}{% endblock %}
 </body>
+
 </html>

@@ -2,13 +2,13 @@
 <div class="panel panel-default" id="panel-{{date}}">
   <div class="panel-heading">
     <p>{{date}}</p>
-    <h2><a href="/event/{{date}}/{{warmup}}">{{speaker}}</a> <span class="badge badge-secondary">{{affiliation}}</span></h2>
+    <h2><a href="/event/{{date}}/{{warmup}}">{{speaker | e}}</a> <span class="badge badge-secondary">{{affiliation}}</span></h2>
   </div>
   <div class="panel-body">
-  <h2><a href="/event/{{date}}/{{warmup}}">{{title}}</a></h2>
-  <div style="white-space:pre-wrap">{{abstract}}</div>
+  <h2><a href="/event/{{date}}/{{warmup}}">{{title | e}}</a></h2>
+  <div style="white-space:pre-wrap">{{abstract | e}}</div>
   <h4>Speaker's Bio</h4>
-  <div style="white-space:pre-wrap">{{bio}}</div>
+  <div style="white-space:pre-wrap">{{bio | e}}</div>
   </div>
   {% if warmup %}
   <strong>This was a short "warmup" talk for <a href="/event/{{date}}/{{warmup}}">another talk</a>.</strong>

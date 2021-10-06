@@ -1,5 +1,11 @@
 {% extends "base_.html" %}
 {% import 'macros_event.html' as event %}
+{% block title %}
+{{talk[2] | e}}: {{talk[4] | e}} — {{EVENT_NAME | e}}
+{% endblock %}
+{% block description %}
+{{talk[5] | e}}
+{% endblock %}
 {% block row %}
 <div class="container">
 <div class="row">
