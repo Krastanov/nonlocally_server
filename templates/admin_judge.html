@@ -1,0 +1,54 @@
+{% extends "baseadmin.html" %}
+{% block row %}
+<div class="container">
+<div class="row">
+<div class="col-md-6 col-md-offset-3">
+<h1>Judge Applications</h1>
+<form id="inviteForm" action="/admin/judgedo" method="POST" accept-charset="UTF-8">
+  <div>
+    <div class="form-group">
+        <label for="emailv">Speaker's email</label>
+	<input type="emailv" disabled class="form-control" id="emailv" name="emailv" value="{{data.get('email')}}"/>
+    </div>
+    <div class="form-group">
+        {% if confirmed_date %}
+	<label for="date">Date</label><br>
+	<input type="text" disabled class="form-control" id="date" name="date" value="{{confirmed_date}}"/>
+	<input type="hidden" id="date" name="date" value="{{confirmed_date}}"/>
+        {% else %}
+	<label for="date">Select a date: </label><br>
+	{% for d in dates %}
+	<input type="radio" required id="date" name="date" value="{{d}}"/> {{d}}<br>
+	{% endfor %}
+        {% endif %}
+    </div>
+    <div class="form-group">
+        <label for="speaker">Speaker's name</label>
+	<input type="text" disabled class="form-control" id="speaker" name="speaker" value="{{data.get('speaker', '')}}">
+    </div>
+    <div class="form-group">
+        <label for="affiliation">Affiliation</label>
+	<input type="text" disabled class="form-control" id="affiliation" name="affiliation" value="{{data.get('affiliation', '')}}">
+    </div>
+    <div class="form-group">
+        <label for="title">Talk's title</label>
+	<input type="text" disabled class="form-control" id="title" name="title" value="{{data.get('title', '')}}">
+    </div>
+    <div class="form-group">
+        <label for="abstract">Abstract</label>
+	<textarea disabled class="form-control" id="abstract" name="abstract"/>{{data.get('abstract','')}}</textarea>
+    </div>
+    <div class="form-group">
+        <label for="abstract">Previous publications and talks</label>
+	<textarea disabled class="form-control" id="abstract" name="abstract"/>{{data.get('previous_records','')}}</textarea>
+    </div>
+    <div class="form-group">
+        <label for="bio">Speaker's bio</label>
+	<textarea disabled class="form-control" id="bio" name="bio"/>{{data.get('bio','')}}</textarea>
+    </div>
+    <input type="hidden" id="uuid" name="uuid" value="{{uuid}}">
+    {% if warmup==True %} <p>This is a short "warmup" talk before the main talk.</p> {% endif %}
+    <input class="btn btn-primary" type="submit" value="Accept Application">
+  </div>
+</form>
+{% endblock %}

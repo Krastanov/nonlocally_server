@@ -32,6 +32,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
 
+# TODO unify admin_judge, apply_index, and invite_index / unify the invitations and applications tables
+
 file_dir = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -147,12 +149,15 @@ class Root:
         try:
             with conn() as c:
                 warmup = warmup and not (warmup=='False' or warmup=='0')
-                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (dateutil.parser.isoparse(date), warmup)).fetchone()
+                parseddate = dateutil.parser.isoparse(date)
+                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
+                if not warmup:
+                    has_warmup = c.execute('SELECT COUNT(*) FROM events WHERE warmup=? AND date=?', (True, parseddate)).fetchone()[0]
             future = talk[0]>datetime.datetime.now()
         except:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
-        return templates.get_template('__event.html').render(talk=talk, future=future)
+        return templates.get_template('__event.html').render(talk=talk, future=future, has_warmup=not warmup and has_warmup)
 
 
 class Apply:
@@ -178,7 +183,7 @@ class Apply:
     @cherrypy.expose
     def do(self, **kwargs):
         uid = str(uuid.uuid4())
-        args = 'speaker, affiliation, bio, title, abstract, email'
+        args = 'speaker, affiliation, bio, title, abstract, email, previous_records'
         args_s = args.split(', ')
         data = []
         for a in args_s:
@@ -186,10 +191,11 @@ class Apply:
             data.append(v)
         dates = [dateutil.parser.isoparse(v) for k,v in kwargs.items()
                  if k.startswith('date')]
-        dates = '|'.join(str(d) for d in dates) # TODO register a converter
+        dates = '|'.join(repr(d) for d in dates) # TODO register a converter
         args = args + ', warmup, uuid, dates'
         args_s.extend(['warmup', 'uuid', 'dates'])
         data.extend([True, uid, dates])
+        data_dict = dict(zip(args_s, data))
         placeholders = ("?,"*len(args_s))[:-1]
         good_talks = self.available_talks()
         if set(dates) > set([g for g,s,t in good_talks]):
@@ -198,7 +204,29 @@ class Apply:
             c = c.cursor()
             c.execute('INSERT INTO applications (%s) VALUES (%s)'%(args, placeholders),
                       data)
-        return templates.get_template('apply_blank.html').render(content='Submission successful! You will receive an email with a decision, depending on availability, before the talk.')
+        text_content = 'Submission successful! You will receive an email with a decision, depending on availability, before the talk.'
+        html_content = '<p>%s</p><h2>%s</h2><strong>%s</strong><p>%s</p><p>%s</p><p>%s</p>'%(text_content, *[data_dict[k] for k in ['title','speaker','abstract','bio','previous_records']])
+        subject = 'Speaker application: %s'%data_dict['title']
+        send_email(text_content, html_content, data_dict['email'], subject)
+        return templates.get_template('apply_blank.html').render(content=text_content)
+
+
+def available_dates(uuid, table='invitations'):
+    with conn() as c:
+        c = c.cursor()
+        c.execute('SELECT dates, warmup, confirmed_date FROM %s WHERE uuid=?'%table, (uuid,))
+        dates, warmup, confirmed_date  = c.fetchone()
+    suggested_dates = [eval(d) for d in dates.split('|')] # TODO better parsing... actually better storing of array of dates too
+    with conn() as c:
+        c = c.cursor()
+        c.execute('SELECT date FROM events WHERE warmup=?', (warmup,))
+        occupied_dates = [d[0] for d in c.fetchall()]
+    good_dates = set(suggested_dates) - set(occupied_dates)
+    if confirmed_date:
+        good_dates = good_dates.union(set([confirmed_date]))
+    today = datetime.datetime.now()
+    good_dates = sorted([d for d in good_dates if d>today])
+    return good_dates, confirmed_date
 
 
 @cherrypy.popargs('uuid')
@@ -213,7 +241,7 @@ class Invite:
         except:
             log.error('Attempted opening unknown invite %s %s %s'%(uuid, email, warmup))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
-        good_dates, confirmed_date = self.available_dates(uuid)
+        good_dates, confirmed_date = available_dates(uuid)
         args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link'
         if confirmed_date:
             with conn() as c:
@@ -226,24 +254,6 @@ class Invite:
         else:
             old_data = dict()
         return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email)
-
-    @staticmethod
-    def available_dates(uuid):
-        with conn() as c:
-            c = c.cursor()
-            c.execute('SELECT dates, warmup, confirmed_date FROM invitations WHERE uuid=?', (uuid,))
-            dates, warmup, confirmed_date  = c.fetchone()
-        suggested_dates = [eval(d) for d in dates.split('|')] # TODO better parsing... actually better storing of array of dates too
-        with conn() as c:
-            c = c.cursor()
-            c.execute('SELECT date FROM events WHERE warmup=?', (warmup,))
-            occupied_dates = [d[0] for d in c.fetchall()]
-        good_dates = set(suggested_dates) - set(occupied_dates)
-        if confirmed_date:
-            good_dates = good_dates.union(set([confirmed_date]))
-        today = datetime.datetime.now()
-        good_dates = sorted([d for d in good_dates if d>today])
-        return good_dates, confirmed_date
 
     @cherrypy.expose
     def do(self, **kwargs):
@@ -259,7 +269,7 @@ class Invite:
                 v = v == 'True' or v == 'Yes'
             data.append(v)
         data[0] = dateutil.parser.isoparse(data[0])
-        good_dates, confirmed_date = self.available_dates(uuid)
+        good_dates, confirmed_date = available_dates(uuid)
         data_dict = dict(zip(args_s, data))
         if confirmed_date and confirmed_date < datetime.datetime.now():
             return templates.get_template('invite_blank.html').render(content='Can not edit past events!')
@@ -313,7 +323,7 @@ class Invite:
         text_content = subject = '%s, you submitted your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+uuid
         public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
-        html_content = 'You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a>'%(url, url, public_url, public_url) 
+        html_content = '<p>You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
         send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
 
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
@@ -417,7 +427,59 @@ class Admin:
 
     @cherrypy.expose
     def judge(self, uuid):
-        return templates.get_template('admin_blank.html').render(content='Judging applications is not implemented yet!')
+        args = 'speaker,affiliation,bio,title,abstract,warmup,email,dates,previous_records,confirmed_date,declined'
+        try:
+            with conn() as c:
+                c = c.cursor()
+                c.execute('SELECT %s FROM applications WHERE uuid=?;'%args, (uuid,))
+                data = c.fetchone()
+        except:
+            log.error('Attempted opening unknown application %s %s %s'%(uuid, email, warmup))
+            return templates.get_template('admin_blank.html').render(content='This application is invalid! Please contact whomever sent you the invite!')
+        good_dates, confirmed_date = available_dates(uuid, table='applications')
+        args_s = args.split(',')
+        data_dict = dict(zip(args_s, data))
+        return templates.get_template('admin_judge.html').render(dates=good_dates, confirmed_date=confirmed_date, uuid=uuid, warmup=data_dict['warmup'], data=data_dict)
+
+    @cherrypy.expose
+    def judgedo(self, **kwargs):
+        uuid = kwargs['uuid']
+        good_dates, confirmed_date = available_dates(uuid, table='applications')
+        if confirmed_date:
+            return templates.get_template('invite_blank.html').render(content='This app has already been accepted!')
+        args = 'speaker,affiliation,bio,title,abstract,warmup,email,dates,previous_records,confirmed_date,declined'
+        try:
+            with conn() as c:
+                c = c.cursor()
+                c.execute('SELECT %s FROM applications WHERE uuid=?;'%args, (uuid,))
+                data = c.fetchone()
+        except:
+            log.error('Attempted accepting unknown application %s %s %s'%(uuid, email, warmup))
+            return templates.get_template('admin_blank.html').render(content='This application is invalid! Please contact whomever sent you the invite!')
+        args_s = args.split(',')
+        data_dict = dict(zip(args_s, data))
+        if data_dict['declined']:
+            return templates.get_template('admin_blank.html').render(content='This app has already been accepted!')
+        confirmed_date = dateutil.parser.isoparse(kwargs['date'])
+        if confirmed_date not in good_dates:
+            return templates.get_template('admin_blank.html').render(content='The selected date is not available!')
+        if not data_dict['warmup']:
+            return templates.get_template('admin_blank.html').render(content='Only warmup talks are supported through this interface for the moment! Contact the admin for help!')
+
+        args = 'speaker,affiliation,bio,title,abstract,warmup,email,previous_records,date,recording_consent'
+        args_s = args.split(',')
+        placeholders = ','.join(['?']*len(args_s))
+        data_dict['date'] = confirmed_date
+        data_dict['recording_consent'] = True
+        with conn() as c:
+            c = c.cursor()
+            c.execute("INSERT INTO events (%s) VALUES (%s)"%(
+                             args, placeholders,
+                         ),
+                      [data_dict[a] for a in args_s])
+            c.execute('UPDATE applications SET confirmed_date=? WHERE uuid=?',
+                      (confirmed_date,uuid))
+        return templates.get_template('admin_blank.html').render(content='Application accepted!')
 
     @cherrypy.expose
     def authzoom(self):

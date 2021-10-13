@@ -1,4 +1,4 @@
-{% macro event(date, speaker, affiliation, title, abstract, bio, warmup, showvideo, footer) %}
+{% macro event(date, speaker, affiliation, title, abstract, bio, warmup, showvideo, footer, has_warmup) %}
 <div class="panel panel-default" id="panel-{{date}}">
   <div class="panel-heading">
     <p>{{date}}</p>
@@ -10,10 +10,7 @@
   <h4>Speaker's Bio</h4>
   <div style="white-space:pre-wrap">{{bio | e}}</div>
   </div>
-  {% if warmup %}
-  <strong>This was a short "warmup" talk for <a href="/event/{{date}}/{{warmup}}">another talk</a>.</strong>
-  {% else %}
-  {% if showvideo %}
+  {% if showvideo and not warmup %}
   <div style="margin:1em;">
   <video id="video{{date | replace(" ","_") | replace(":","_")}}-{{warmup+0}}" controls style="width:100%" preload="none" poster="/video/poster/{{date}}-{{warmup+0}}.jpg"></video>
 <script src="/static/hls.js"></script>
@@ -35,9 +32,14 @@
 </script>
   </div>
   {% endif %}
-  {% endif %}
   <div class="panel-footer">
   {{footer}}
+  {% if warmup %}
+  <strong>This is a short "warmup" talk for <a href="/event/{{date}}/0">another talk</a>.</strong>
+  {% endif %}
+  {% if has_warmup %}
+  <br>This talk is preceeded by <a href="/event/{{date}}/1">a short talk from a junior scientist</a>.
+  {% endif %}
   </div>
 </div>
 {% endmacro %}
