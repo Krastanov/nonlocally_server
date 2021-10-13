@@ -12,7 +12,7 @@
 <div class="col-md-6 col-md-offset-3">
 {% for date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link in [talk] %}
   {% set footer %}
-    {% if future %}
+    {% if future and not warmup %}
       {% if conf_link %}
       <a href="{{conf_link if conf_link else ''}}">video conference link</a>
       {% else %}
@@ -28,7 +28,7 @@
       {% endif %}
     {% endif %}
   {% endset %}
-  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent and not future, footer) }}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent and not future, footer, has_warmup) }}
 {% endfor %}
 </div>
 </div>
