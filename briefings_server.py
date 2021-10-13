@@ -75,6 +75,8 @@ def updateconf(k,v):
 templates = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=os.path.join(file_dir,'templates/')))
 templates.globals['EVENT_NAME'] = conf('event.name')
 templates.globals['DESCRIPTION'] = conf('event.description')
+templates.globals['URL'] = conf('server.url')
+templates.globals['KEYWORDS'] = conf('event.keywords')
 
 
 def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[], cc=[]):
