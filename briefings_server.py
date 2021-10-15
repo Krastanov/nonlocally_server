@@ -614,7 +614,7 @@ class Google:
     scopes=['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive']
     @staticmethod
     def getflow():
-        redirecturl = 'https://'+conf('server.url')+'/zoom/receive_code'
+        redirecturl = 'https://'+conf('server.url')+'/google/receive_code'
         client_config = json.loads(conf('google.client_secrets'))
         flow = Flow.from_client_config(client_config, scopes=Google.scopes, redirect_uri=redirecturl)
         return flow
