@@ -391,7 +391,7 @@ class Admin:
         invite_link = 'https://'+conf('server.url')+'/invite/'+uid
         invite_link = '<a href="%s">%s</a>'%(invite_link, invite_link)
         dates = '<ul>%s</ul>'%''.join('<li>%s</li>'%d for d in dates)
-        html_content = conf('invitations.email_message').format(dates=dates, invite_link=invite_link)
+        html_content = conf('invitations.email_message').format(dates=dates, invite_link=invite_link,host=host)
         html_panel = '<div class="panel panel-default"><div class="panel-body">%s</div></div>'%html_content
         email_link = '<a href="mailto:%s">%s</a>'%(email,email)
         if kwargs.get('send'):
