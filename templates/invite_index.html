@@ -3,60 +3,64 @@
 <div class="container">
 <div class="row">
 <div class="col-md-6 col-md-offset-3">
-<h1>Speaker information</h1>
-{% if old_data and old_data['conf_link'] %}
-  <p>Video-conferencing link: <a href="{{old_data['conf_link']}}">{{old_data['conf_link']}}</a></p>
-{% endif %}
-{% if host %}
-  <p>This talk will be hosted by <a href="mailto:{{host_email}}">{{host}}</a>.</p>
-{% endif %}
-<form id="inviteForm" action="/invite/do" method="POST" accept-charset="UTF-8">
-  <div>
-    <div class="form-group">
+{% if dates or confirmed_date %}
+  <h1>Speaker information</h1>
+  {% if old_data and old_data['conf_link'] %}
+    <p>Video-conferencing link: <a href="{{old_data['conf_link']}}">{{old_data['conf_link']}}</a></p>
+  {% endif %}
+  {% if host %}
+    <p>This talk will be hosted by <a href="mailto:{{host_email}}">{{host}}</a>.</p>
+  {% endif %}
+  <form id="inviteForm" action="/invite/do" method="POST" accept-charset="UTF-8">
+    <div>
+      <div class="form-group">
         <label for="emailv">Speaker's email</label>
-	<input type="emailv" disabled class="form-control" id="emailv" name="emailv" value="{{email}}"/>
-	<input type="hidden" id="email" name="email" value="{{email}}"/>
-    </div>
-    <div class="form-group">
+        <input type="emailv" disabled class="form-control" id="emailv" name="emailv" value="{{email}}"/>
+        <input type="hidden" id="email" name="email" value="{{email}}"/>
+      </div>
+      <div class="form-group">
         {% if confirmed_date %}
-	<label for="date">Date</label><br>
-	<input type="text" disabled class="form-control" id="date" name="date" value="{{confirmed_date}}"/>
-	<input type="hidden" id="date" name="date" value="{{confirmed_date}}"/>
+          <label for="date">Date</label><br>
+          <input type="text" disabled class="form-control" id="date" name="date" value="{{confirmed_date}}"/>
+          <input type="hidden" id="date" name="date" value="{{confirmed_date}}"/>
         {% else %}
-	<label for="date">Select a date: </label><br>
-	{% for d in dates %}
-	<input type="radio" required id="date" name="date" value="{{d}}"/> {{d}}<br>
-	{% endfor %}
+          <label for="date">Select a date: </label><br>
+          {% for d in dates %}
+            <input type="radio" required id="date" name="date" value="{{d}}"/> {{d}}<br>
+          {% endfor %}
         {% endif %}
-    </div>
-    <div class="form-group">
+      </div>
+      <div class="form-group">
         <label for="speaker">Speaker's name (as will be shown on public pages - unicode supported)</label>
-	<input type="text" required class="form-control" id="speaker" name="speaker" value="{{old_data.get('speaker', '')}}">
-    </div>
-    <div class="form-group">
+        <input type="text" required class="form-control" id="speaker" name="speaker" value="{{old_data.get('speaker', '')}}">
+      </div>
+      <div class="form-group">
         <label for="affiliation">Affiliation</label>
-	<input type="text" required class="form-control" id="affiliation" name="affiliation" value="{{old_data.get('affiliation', '')}}">
-    </div>
-    <div class="form-group">
+        <input type="text" required class="form-control" id="affiliation" name="affiliation" value="{{old_data.get('affiliation', '')}}">
+      </div>
+      <div class="form-group">
         <label for="title">Talk's title</label>
-	<input type="text" required class="form-control" id="title" name="title" value="{{old_data.get('title', '')}}">
-    </div>
-    <div class="form-group">
+        <input type="text" required class="form-control" id="title" name="title" value="{{old_data.get('title', '')}}">
+      </div>
+      <div class="form-group">
         <label for="abstract">Abstract</label>
-	<textarea required class="form-control" id="abstract" name="abstract"/>{{old_data.get('abstract','')}}</textarea>
-    </div>
-    <div class="form-group">
+        <textarea required class="form-control" id="abstract" name="abstract"/>{{old_data.get('abstract','')}}</textarea>
+      </div>
+      <div class="form-group">
         <label for="bio">Speaker's bio</label>
-	<textarea required class="form-control" id="bio" name="bio"/>{{old_data.get('bio','')}}</textarea>
-    </div>
-    <div class="form-group">
+        <textarea required class="form-control" id="bio" name="bio"/>{{old_data.get('bio','')}}</textarea>
+      </div>
+      <div class="form-group">
         <label for="recording_consent">Do you consent to recording and publishing the talk?</label>
-	<input type="checkbox" {{'checked' if old_data.get('recording_consent') or not old_data else ''}} id="recording_consent" name="recording_consent" value='Yes'/> Yes
+        <input type="checkbox" {{'checked' if old_data.get('recording_consent') or not old_data else ''}} id="recording_consent" name="recording_consent" value='Yes'/> Yes
+      </div>
+        <input type="hidden" id="uuid" name="uuid" value="{{uuid}}">
+        <input type="hidden" id="warmup" name="warmup" value="{{warmup}}">
+        {% if warmup==True %} <p>This is a short "warmup" talk before the main talk.</p> {% endif %}
+        <input class="btn btn-primary" type="submit" value="Accept/Update Invitation">
     </div>
-    <input type="hidden" id="uuid" name="uuid" value="{{uuid}}">
-    <input type="hidden" id="warmup" name="warmup" value="{{warmup}}">
-    {% if warmup==True %} <p>This is a short "warmup" talk before the main talk.</p> {% endif %}
-    <input class="btn btn-primary" type="submit" value="Accept/Update Invitation">
-  </div>
-</form>
+  </form>
+{% else %}
+<p>This invitation has expired! Please contact whomever sent you the invite so they can prepare a new one.</p>
+{% endif %}
 {% endblock %}

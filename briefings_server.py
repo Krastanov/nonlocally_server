@@ -73,6 +73,8 @@ def updateconf(k,v):
         c = conn.cursor()
         c.execute('UPDATE config SET value=? WHERE key=?',(v,k))
 
+def parsedates(dates): # TODO this should be automatically done as a registered converter
+    return [eval(d) for d in dates.split('|')] # TODO better parsing... actually better storing of array of dates too
 
 templates = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=os.path.join(file_dir,'templates/')))
 templates.globals['EVENT_NAME'] = conf('event.name')
@@ -211,12 +213,12 @@ class Apply:
         return templates.get_template('apply_blank.html').render(content=text_content)
 
 
-def available_dates(uuid, table='invitations'):
+def available_dates(uuid, table='invitations', daysoffset=0):
     with conn() as c:
         c = c.cursor()
         c.execute('SELECT dates, warmup, confirmed_date FROM %s WHERE uuid=?'%table, (uuid,))
         dates, warmup, confirmed_date  = c.fetchone()
-    suggested_dates = [eval(d) for d in dates.split('|')] # TODO better parsing... actually better storing of array of dates too
+    suggested_dates = parsedates(dates) # TODO register a converter
     with conn() as c:
         c = c.cursor()
         c.execute('SELECT date FROM events WHERE warmup=?', (warmup,))
@@ -224,7 +226,7 @@ def available_dates(uuid, table='invitations'):
     good_dates = set(suggested_dates) - set(occupied_dates)
     if confirmed_date:
         good_dates = good_dates.union(set([confirmed_date]))
-    today = datetime.datetime.now()
+    today = datetime.datetime.now() + datetime.timedelta(days=daysoffset)
     good_dates = sorted([d for d in good_dates if d>today])
     return good_dates, confirmed_date
 
@@ -241,7 +243,7 @@ class Invite:
         except:
             log.error('Attempted opening unknown invite %s %s %s'%(uuid, email, warmup))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
-        good_dates, confirmed_date = available_dates(uuid)
+        good_dates, confirmed_date = available_dates(uuid, daysoffset=conf('invitations.neededdays'))
         args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link'
         if confirmed_date:
             with conn() as c:
@@ -408,10 +410,13 @@ class Admin:
     @cherrypy.expose
     def invitestatus(self):
         with conn() as c:
-            all_invites = list(c.execute('SELECT uuid, email, confirmed_date FROM invitations'))[::-1]
+            all_invites = list(c.execute('SELECT uuid, email, confirmed_date, dates FROM invitations'))[::-1]
+        lim = datetime.datetime.now() + datetime.timedelta(days=conf('invitations.neededdays'))
         content = ''.join('<li><a href="/invite/{uuid}">{email} | {accepted}</a>'.format(
-                          uuid=uuid, email=email, accepted='accepted for %s'%confirmed_date if confirmed_date else 'not accepted yet')
-                for (uuid, email, confirmed_date) in all_invites)
+                          uuid=uuid, email=email,
+                          accepted='accepted for %s'%confirmed_date if confirmed_date
+                              else 'not accepted yet' if any(d>lim for d in parsedates(dates)) else 'expired')
+                for (uuid, email, confirmed_date, dates) in all_invites)
         content = "<h1>All Invites</h1><ul>%s</ul>"%content
         return templates.get_template('admin_blank.html').render(content=content)
 
