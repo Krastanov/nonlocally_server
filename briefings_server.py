@@ -364,7 +364,11 @@ class Admin:
 
     @cherrypy.expose
     def invite(self):
-        return templates.get_template('admin_invite.html').render()
+        with conn() as c:
+            takendates = list(c.execute('SELECT date FROM events WHERE warmup=0 ORDER BY date ASC'))
+        today = datetime.datetime.now()
+        takendates = ','.join("'%s'"%d.strftime('%Y-%m-%d') for (d,) in takendates if d>today)
+        return templates.get_template('admin_invite.html').render(takendates=takendates)
 
     @cherrypy.expose
     def invitedo(self, **kwargs):
