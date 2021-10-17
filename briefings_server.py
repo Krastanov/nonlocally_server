@@ -364,10 +364,16 @@ class Admin:
 
     @cherrypy.expose
     def invite(self):
-        with conn() as c:
-            takendates = list(c.execute('SELECT date FROM events WHERE warmup=0 ORDER BY date ASC'))
         today = datetime.datetime.now()
-        takendates = ','.join("'%s'"%d.strftime('%Y-%m-%d') for (d,) in takendates if d>today)
+        with conn() as c:
+            takendates = [d for (d,) in c.execute('SELECT date FROM events WHERE warmup=0 ORDER BY date ASC') if d>today]
+        start_of_month = datetime.datetime(today.year, today.month, 1)
+        removedates = [start_of_month]
+        day = datetime.timedelta(days=1)
+        for i in range(today.day+conf('invitations.neededdays')):
+            removedates.append(removedates[-1]+day)
+        takendates += removedates
+        takendates = ','.join("'%s'"%d.strftime('%Y-%m-%d') for d in takendates)
         return templates.get_template('admin_invite.html').render(takendates=takendates)
 
     @cherrypy.expose
