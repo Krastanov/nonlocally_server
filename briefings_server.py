@@ -243,7 +243,7 @@ class Invite:
                 c.execute('SELECT email, warmup, host, host_email FROM invitations WHERE uuid=?;', (uuid,))
                 email, warmup, host, host_email  = c.fetchone()
         except:
-            log.error('Attempted opening unknown invite %s %s %s'%(uuid, email, warmup))
+            log.error('Attempted opening unknown invite %s '%(uuid,))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
         good_dates, confirmed_date = available_dates(uuid, daysoffset=conf('invitations.neededdays'))
         args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link'
@@ -310,19 +310,22 @@ class Invite:
             except:
                 log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
             # Calendar
-            creds = Google.getcreds()
-            with build('calendar','v3',credentials=creds) as service:
-                title = data_dict["speaker"]+": "+data_dict["title"]
-                j = service.events().quickAdd(calendarId=conf('google.calendarid'),text=title).execute()
-                event_id = j["id"]
-                date = data_dict["date"]
-                j["start"]["dateTime"] = date.isoformat('T')
-                j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
-                nj = {
-                        "start": j["start"],
-                        "end": j["end"],
-                        "description": data_dict["abstract"]}
-                j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
+            try:
+                creds = Google.getcreds()
+                with build('calendar','v3',credentials=creds) as service:
+                    title = data_dict["speaker"]+": "+data_dict["title"]
+                    j = service.events().quickAdd(calendarId=conf('google.calendarid'),text=title).execute()
+                    event_id = j["id"]
+                    date = data_dict["date"]
+                    j["start"]["dateTime"] = date.isoformat('T')
+                    j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
+                    nj = {
+                            "start": j["start"],
+                            "end": j["end"],
+                            "description": data_dict["abstract"]}
+                    j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
+            except:
+                log.error('Could not create a calendar event for %s %s'%(data_dict['date'], data_dict['warmup']))
         # Email
         text_content = subject = '%s, you submitted your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+uuid
