@@ -8,7 +8,7 @@
   <h2><a href="/event/{{date}}/{{warmup}}">{{title | e}}</a></h2>
   <div style="white-space:pre-wrap">{{abstract | e}}</div>
   <h4>Speaker's Bio</h4>
-  <div style="white-space:pre-wrap">{{bio | e}}</div>
+  <div style="white-space:pre-wrap;max-height:500px;overflow-y:auto;">{{bio | e}}</div>
   </div>
   {% if showvideo and not warmup %}
   <div style="margin:1em;">
