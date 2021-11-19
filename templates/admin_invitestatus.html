@@ -1,0 +1,11 @@
+{% extends "baseadmin.html" %}
+{% block row %}
+<h1>All Invites</h1>
+<table>
+{% for uuid, email, confirmed_date, dates, accepted in all_invites %}
+<tr>
+<td><a href="/invite/{{uuid}}">{{email}}</a></td><td>{{accepted}}</td>
+<td>{% if confirmed_date %}<a href="/admin/modevent/{{confirmed_date}}/0/cal">make calendar event</a>{% endif %}</td></tr>
+{% endfor %}
+</table>
+{% endblock %}

@@ -152,7 +152,7 @@ class Root:
     def event(self, date, warmup):
         try:
             with conn() as c:
-                warmup = warmup and not (warmup=='False' or warmup=='0')
+                warmup = warmup and not (warmup=='False' or warmup=='0') # TODO this should not be such a mess to parse
                 parseddate = dateutil.parser.isoparse(date)
                 talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
                 if not warmup:
@@ -311,19 +311,10 @@ class Invite:
                 log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
             # Calendar
             try:
-                creds = Google.getcreds()
-                with build('calendar','v3',credentials=creds) as service:
-                    title = data_dict["speaker"]+": "+data_dict["title"]
-                    j = service.events().quickAdd(calendarId=conf('google.calendarid'),text=title).execute()
-                    event_id = j["id"]
-                    date = data_dict["date"]
-                    j["start"]["dateTime"] = date.isoformat('T')
-                    j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
-                    nj = {
-                            "start": j["start"],
-                            "end": j["end"],
-                            "description": data_dict["abstract"]}
-                    j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
+                title = data_dict["speaker"]+": "+data_dict["title"]
+                date = data_dict["date"]
+                description = data_dict["abstract"]
+                Invite.makecalevent(title,date,description)
             except:
                 log.error('Could not create a calendar event for %s %s'%(data_dict['date'], data_dict['warmup']))
         # Email
@@ -334,6 +325,21 @@ class Invite:
         send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
 
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
+
+    @staticmethod
+    def makecalevent(title,date,description):
+        creds = Google.getcreds()
+        with build('calendar','v3',credentials=creds) as service:
+            j = service.events().quickAdd(calendarId=conf('google.calendarid'),text=title).execute()
+            event_id = j["id"]
+            j["start"]["dateTime"] = date.isoformat('T')
+            j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
+            nj = {
+                    "start": j["start"],
+                    "end": j["end"],
+                    "description": description}
+            j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
+
 
 
 def add_default_time_to_date(date):
@@ -427,13 +433,11 @@ class Admin:
         with conn() as c:
             all_invites = list(c.execute('SELECT uuid, email, confirmed_date, dates FROM invitations'))[::-1]
         lim = datetime.datetime.now() + datetime.timedelta(days=conf('invitations.neededdays'))
-        content = ''.join('<li><a href="/invite/{uuid}">{email} | {accepted}</a>'.format(
-                          uuid=uuid, email=email,
-                          accepted='accepted for %s'%confirmed_date if confirmed_date
+        all_invites = [(uuid, email, confirmed_date, dates, 
+                              'accepted for %s'%confirmed_date if confirmed_date
                               else 'not accepted yet' if any(d>lim for d in parsedates(dates)) else 'expired')
-                for (uuid, email, confirmed_date, dates) in all_invites)
-        content = "<h1>All Invites</h1><ul>%s</ul>"%content
-        return templates.get_template('admin_blank.html').render(content=content)
+                for (uuid, email, confirmed_date, dates) in all_invites]
+        return templates.get_template('admin_invitestatus.html').render(all_invites=all_invites)
 
     @cherrypy.expose
     def applicationsstatus(self):
@@ -500,6 +504,38 @@ class Admin:
             c.execute('UPDATE applications SET confirmed_date=? WHERE uuid=?',
                       (confirmed_date,uuid))
         return templates.get_template('admin_blank.html').render(content='Application accepted!')
+
+    @cherrypy.expose
+    def modevent(self, date, warmup, action):
+        try:
+            with conn() as c:
+                warmup = warmup and not (warmup=='False' or warmup=='0') # TODO this should not be such a mess to parse
+                parseddate = dateutil.parser.isoparse(date)
+                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
+                if not warmup:
+                    has_warmup = c.execute('SELECT COUNT(*) FROM events WHERE warmup=? AND date=?', (True, parseddate)).fetchone()[0]
+                has_warmup=not warmup and has_warmup
+            future = talk[0]>datetime.datetime.now()
+            # TODO this dictionary interface is used often... there should be a more official way to get a dictionary... if not make your own helper function
+            args = 'date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link'.split(', ')
+            data_dict = {k:v for (k,v) in zip(args,talk)}
+            data_dict['has_warmup'] = has_warmup
+        except:
+            log.error('Attempted modifying unknown talk %s %s'%(date, warmup))
+        if action == 'cal':
+            try:
+                title = data_dict["speaker"]+": "+data_dict["title"]
+                date = data_dict["date"]
+                description = data_dict["abstract"]
+                Invite.makecalevent(title,date,description)
+            except:
+                log.error('Could not create a calendar event for %s %s'%(data_dict['date'], data_dict['warmup']))
+                return templates.get_template('admin_blank.html').render(content='Problem with the google calendar encountered!')
+        else:
+            return templates.get_template('admin_blank.html').render(content='Unknown operation attempted!')
+        return templates.get_template('admin_blank.html').render(content='Modification successful!')
+
+
 
     @cherrypy.expose
     def authzoom(self):
