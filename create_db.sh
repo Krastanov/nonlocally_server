@@ -18,6 +18,7 @@ CREATE TABLE events
  previous_records TEXT,
  host TEXT,
  host_email TEXT,
+ location TEXT,
  PRIMARY KEY (date, warmup)
 );
 
