@@ -1,7 +1,7 @@
 {% extends "baseadmin.html" %}
 {% block row %}
 <h1>All Invites</h1>
-<table>
+<table class="table-bordered table-hover table-condensed">
 {% for uuid, email, confirmed_date, dates, accepted in all_invites %}
 <tr>
 <td><a href="/invite/{{uuid}}">{{email}}</a></td><td>{{accepted}}</td>

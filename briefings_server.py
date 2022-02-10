@@ -91,7 +91,7 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         msg['Subject'] = subject
         msg['From'] = email.headerregistry.Address(conf('email.from_display'), conf('email.from_user'), conf('email.from'))
         msg['To'] = emailaddr
-        msg['Cc'] = ','.join([conf('email.cc')]+cc)
+        msg['Cc'] = ','.join(conf('email.cc')+cc+[conf('sysadmin.email')])
 
         msg.add_alternative(html_content, subtype='html')
         for pngbytes, cid in pngbytes_cids:
@@ -388,7 +388,7 @@ class Admin:
             with sqlite3.connect(os.path.join(file_dir,'config.sqlite')) as conn:
                 conn.cursor().execute('UPDATE config SET value=? WHERE key=?', (value,key))
                 conn.commit()
-            raise cherrypy.HTTPRedirect("/sysadmin/config#panel-%s"%key)
+            raise cherrypy.HTTPRedirect("../config#panel-%s"%key)
         raise cherrypy.HTTPError(403)
 
     @cherrypy.expose
