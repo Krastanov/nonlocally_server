@@ -167,6 +167,10 @@ class Root:
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
         return templates.get_template('__event.html').render(talk=talk, future=future, has_warmup=not warmup and has_warmup)
 
+    @cherrypy.expose
+    def about(self):
+        return templates.get_template('__about.html').render(seminar=conf('event.name'),aboutseminar=conf('event.description'),aboutnonlocally='')
+
 
 class Apply:
     @cherrypy.expose
@@ -357,26 +361,35 @@ def add_default_time_to_date(date):
 
 
 class Admin:
+    access_levels = []
+
     @cherrypy.expose
     def index(self):
         return templates.get_template('admin_blank.html').render(content='From here you can configure the website, invite speakers, and judge applications for warmup talks.')
 
-    @cherrypy.expose
-    def config(self):
-        return "empty"
-        configrecords = list(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT key, value, valuetype, help FROM config ORDER BY key'))
+    @staticmethod
+    def get_configrecords(access_levels=[]):
+        configrecords = list(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT key, value, valuetype, help, access_level FROM config ORDER BY key'))
+        configrecords = [r[:-1] for r in configrecords if r[-1] in [None]+access_levels]
         configrecords.sort(key = lambda _:_[0].split('.')[0])
         configrecords = itertools.groupby(configrecords, key = lambda _:_[0].split('.')[0])
-        return templates.get_template('admin_config.html').render(configrecords=configrecords)
+        return configrecords
+
+    @cherrypy.expose
+    def config(self):
+        return templates.get_template('admin_config.html').render(configrecords=self.get_configrecords(self.access_levels))
 
     @cherrypy.expose
     def update(self, *args, **kwargs):
         key = args[0]
         value = kwargs['value']
-        with sqlite3.connect(os.path.join(file_dir,'config.sqlite')) as conn:
-            conn.cursor().execute('UPDATE config SET value=? WHERE key=?', (value,key))
-            conn.commit()
-        raise cherrypy.HTTPRedirect("/admin/config#panel-%s"%key)
+        config_access = list(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT access_level FROM config WHERE key==?', (key,)))[0]
+        if config_access not in [None]+self.access_levels:
+            with sqlite3.connect(os.path.join(file_dir,'config.sqlite')) as conn:
+                conn.cursor().execute('UPDATE config SET value=? WHERE key=?', (value,key))
+                conn.commit()
+            raise cherrypy.HTTPRedirect("/sysadmin/config#panel-%s"%key)
+        raise cherrypy.HTTPError(403)
 
     @cherrypy.expose
     def invite(self):
@@ -540,8 +553,6 @@ class Admin:
             return templates.get_template('admin_blank.html').render(content='Unknown operation attempted!')
         return templates.get_template('admin_blank.html').render(content='Modification successful!')
 
-
-
     @cherrypy.expose
     def authzoom(self):
         Zoom.start_auth()
@@ -587,6 +598,10 @@ class Admin:
                 j = service.about().get(fields='*').execute()
         content = '<pre>%s</pre>'%json.dumps(j, indent=4)
         return templates.get_template('admin_blank.html').render(content=content)
+
+
+class SysAdmin(Admin):
+    access_levels = ['sysadmin']
 
 
 class Dev:
@@ -716,6 +731,9 @@ def auth(realm,u,p):
     log.info('attempting to access protected area %s'%((realm,u,p),))
     return p==conf('admin.pass') and u==conf('admin.user')
 
+def sysauth(realm,u,p):
+    log.info('attempting to access protected area %s'%((realm,u,p),))
+    return p==conf('sysadmin.pass') and u==conf('sysadmin.user')
 
 if __name__ == '__main__':
     log.info('server starting')
@@ -745,14 +763,20 @@ if __name__ == '__main__':
                              }}
     password_conf = {'/':{
                           'tools.auth_basic.on': True,
-                          'tools.auth_basic.realm': 'engday',
+                          'tools.auth_basic.realm': 'admin',
                           'tools.auth_basic.checkpassword': auth,
                          }}
+    sys_password_conf = {'/':{
+                              'tools.auth_basic.on': True,
+                              'tools.auth_basic.realm': 'sysadmin',
+                              'tools.auth_basic.checkpassword': sysauth,
+                             }}
     cherrypy.tree.mount(Root(), '/', {**static_conf,**video_conf,**customfiles_conf})
     cherrypy.tree.mount(Invite(), '/invite', {})
     cherrypy.tree.mount(Apply(), '/apply', {})
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
-    cherrypy.tree.mount(Dev(), '/dev', password_conf)
+    cherrypy.tree.mount(SysAdmin(), '/sysadmin', sys_password_conf)
+    cherrypy.tree.mount(Dev(), '/dev', sys_password_conf)
     cherrypy.tree.mount(Zoom(), '/zoom', {})
     cherrypy.tree.mount(Google(), '/google', {})
     cherrypy.engine.start()
