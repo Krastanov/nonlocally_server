@@ -85,27 +85,31 @@ templates.globals['KEYWORDS'] = conf('event.keywords')
 
 def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[], cc=[]):
     log.debug('attempting to send email "%s" <%s>'%(subject, emailaddr))
-    msg = email.message.EmailMessage()
-    msg.set_content(text_content)
-    msg['Subject'] = subject
-    msg['From'] = email.headerregistry.Address(conf('email.from_display'), conf('email.from_user'), conf('email.from'))
-    msg['To'] = emailaddr
-    msg['Cc'] = ','.join([conf('email.cc')]+cc)
+    try:
+        msg = email.message.EmailMessage()
+        msg.set_content(text_content)
+        msg['Subject'] = subject
+        msg['From'] = email.headerregistry.Address(conf('email.from_display'), conf('email.from_user'), conf('email.from'))
+        msg['To'] = emailaddr
+        msg['Cc'] = ','.join([conf('email.cc')]+cc)
 
-    msg.add_alternative(html_content, subtype='html')
-    for pngbytes, cid in pngbytes_cids:
-        msg.get_payload()[1].add_related(pngbytes, 'image', 'png', cid=cid)
-    for att in file_atts:
-        msg.attach(att)
-    
-    username = conf('email.SMTPuser')
-    password = conf('email.SMTPpass')
-    server = smtplib.SMTP(socket.gethostbyname(conf('email.SMTPhost'))+':'+conf('email.SMTPport')) # XXX workaround for IPv6 bugs with Digital Ocean
-    server.ehlo()
-    server.starttls()
-    server.login(username,password)
-    server.send_message(msg)
-    server.quit()
+        msg.add_alternative(html_content, subtype='html')
+        for pngbytes, cid in pngbytes_cids:
+            msg.get_payload()[1].add_related(pngbytes, 'image', 'png', cid=cid)
+        for att in file_atts:
+            msg.attach(att)
+        
+        username = conf('email.SMTPuser')
+        password = conf('email.SMTPpass')
+        server = smtplib.SMTP(socket.gethostbyname(conf('email.SMTPhost'))+':'+conf('email.SMTPport')) # XXX workaround for IPv6 bugs with Digital Ocean
+        server.ehlo()
+        server.starttls()
+        server.login(username,password)
+        server.send_message(msg)
+        server.quit()
+    except:
+        log.error('failed to send email "%s" <%s>'%(subject, emailaddr))
+
 
 
 ZOOM_TEMPLATE = {
@@ -359,6 +363,7 @@ class Admin:
 
     @cherrypy.expose
     def config(self):
+        return "empty"
         configrecords = list(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT key, value, valuetype, help FROM config ORDER BY key'))
         configrecords.sort(key = lambda _:_[0].split('.')[0])
         configrecords = itertools.groupby(configrecords, key = lambda _:_[0].split('.')[0])
