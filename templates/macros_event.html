@@ -43,3 +43,18 @@
   </div>
 </div>
 {% endmacro %}
+
+{% macro location_and_conf_link(location, conf_link) %}
+    {% if location %}
+    Location: {{location}}
+    {% else %}
+    {% endif %}
+    {% if location and conf_link %}
+    |
+    {% endif %}
+    {% if conf_link %}
+    <a href="{{conf_link if conf_link else ''}}">video conference link</a>
+    {% else %}
+    video conference link will be posted shortly
+    {% endif %}
+{% endmacro %}

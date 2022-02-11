@@ -58,6 +58,18 @@
         <input type="hidden" id="warmup" name="warmup" value="{{warmup}}">
         {% if warmup==True %} <p>This is a short "warmup" talk before the main talk.</p> {% endif %}
         <input class="btn btn-primary" type="submit" value="Accept/Update Invitation">
+      <p></p>
+      <div>
+      <div class="panel panel-default">
+      <div class="panel-heading">Administrative Details (populated by the host)</div>
+      <div class="panel-body">
+      <div class="form-group">
+        <label for="location">Location</label>
+        <input type="text" required class="form-control" id="location" name="location" value="{{old_data.get('location') if old_data.get('location') else invite_location}}">
+      </div>
+      </div>
+      </div>
+      </div>
     </div>
   </form>
 {% else %}

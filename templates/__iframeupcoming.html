@@ -3,13 +3,9 @@
 {% block row %}
 <div class="col-md-12">
 {% if records %}
-{% for date, speaker, affiliation, title, abstract, bio, conf_link in records %}
+{% for date, speaker, affiliation, title, abstract, bio, conf_link, location in records %}
   {% set footer %}
-    {% if conf_link %}
-    <a href="{{conf_link if conf_link else ''}}">video conference link</a>
-    {% else %}
-    video conference link will be posted shortly
-    {% endif %}
+  {{event.location_and_conf_link(location, conf_link)}}
   {% endset %}
   {{ event.event(date, speaker, affiliation, title, abstract, bio, 0, False, footer) }}
 {% endfor %} 

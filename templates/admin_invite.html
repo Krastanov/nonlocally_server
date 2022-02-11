@@ -16,6 +16,10 @@
 	<p>If you specify only a date, without time, the default seminar time will be added. Dates with scheduled seminars or that are too close in the future are disabled.</p>
     </div>
     <div class="form-group">
+        <label for="location">Tentative location for the audience</label>
+	<input type="text" required class="form-control" id="location" name="location" placeholder="Mars, Solar System" value="{{location | e}}"/>
+    </div>
+    <div class="form-group">
         <label for="hname">Host's name (probably your name)</label>
         <input type="text" required class="form-control" id="hname" name="hname" placeholder="Name McName"/>
     </div>

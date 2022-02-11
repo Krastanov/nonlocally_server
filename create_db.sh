@@ -30,6 +30,7 @@ CREATE TABLE invitations
  confirmed_date TIMESTAMP,
  host TEXT,
  host_email TEXT,
+ location TEXT,
  FOREIGN KEY(confirmed_date, warmup) REFERENCES events(date, warmup)
  -- TODO maybe CHECK that dates has the correct format
 );

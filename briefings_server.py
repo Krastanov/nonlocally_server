@@ -111,44 +111,45 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         log.error('failed to send email "%s" <%s>'%(subject, emailaddr))
 
 
-
-ZOOM_TEMPLATE = {
-                 #"topic": 'Meeting',
-                 "type": 2,
-                 #"start_time": "",
-                 "duration": 240,
-                 "timezone": 'America/New_York',
-                 "settings": {
-                   "host_video": False,
-                   "participant_video": False,
-                   "join_before_host": False,
-                   "mute_upon_entry": True,
-                   "waiting_room": True
-                 }
-               }
+def ZOOM_TEMPLATE():
+    return {
+    #"topic": 'Meeting',
+    "type": 2,
+    #"start_time": "",
+    "duration": 240,
+    "timezone": 'America/New_York',
+    "settings": {
+      "alternative_hosts": ';'.join(conf('zoom.alternative_hosts')),
+      "host_video": False,
+      "participant_video": False,
+      "join_before_host": False,
+      "mute_upon_entry": True,
+      "waiting_room": True
+    }
+    }
 
 
 class Root:
     @cherrypy.expose
     def index(self):
         with conn() as c:
-            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link FROM events WHERE warmup=0 ORDER BY date ASC'))
-        now = datetime.datetime.now() - datetime.timedelta(days=1)
+            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
+        now = datetime.datetime.now() + datetime.timedelta(days=1)
         records = [t for t in all_talks if t[0]>now]
         return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'), banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'), ical=conf('google.calendarical'))
 
     @cherrypy.expose
     def iframeupcoming(self):
         with conn() as c:
-            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link FROM events WHERE warmup=0 ORDER BY date ASC'))
-        now = datetime.datetime.now() - datetime.timedelta(days=1)
+            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
+        now = datetime.datetime.now() + datetime.timedelta(days=1)
         records = [t for t in all_talks if t[0]>now]
         return templates.get_template('__iframeupcoming.html').render(records=records)
 
     @cherrypy.expose
     def past(self):
         with conn() as c:
-            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link FROM events WHERE warmup=0 ORDER BY date DESC'))
+            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location FROM events WHERE warmup=0 ORDER BY date DESC'))
         records = [t for t in all_talks if t[0]<datetime.datetime.now()]
         return templates.get_template('__past.html').render(records=records)
 
@@ -248,8 +249,10 @@ class Invite:
         try:
             with conn() as c:
                 c = c.cursor()
-                c.execute('SELECT email, warmup, host, host_email FROM invitations WHERE uuid=?;', (uuid,))
-                email, warmup, host, host_email  = c.fetchone()
+                c.execute('SELECT email, warmup, host, host_email, location FROM invitations WHERE uuid=?;', (uuid,))
+                email, warmup, host, host_email, invite_location  = c.fetchone()
+                if invite_location is None: # TODO this is ridiculous and it should not be needed
+                    invite_location = ''
         except:
             log.error('Attempted opening unknown invite %s '%(uuid,))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
@@ -265,7 +268,7 @@ class Invite:
             old_data = dict(zip(args_s, data))
         else:
             old_data = dict()
-        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email)
+        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location)
 
     @cherrypy.expose
     def do(self, **kwargs):
@@ -309,14 +312,16 @@ class Invite:
             # Zoom
             zoom_meet_config = {'start_time': data_dict['date'].isoformat('T'),
                                 'topic': conf('event.name')+": "+data_dict['speaker'],
-                                **ZOOM_TEMPLATE}
+                                **ZOOM_TEMPLATE()}
             try:
                 url = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()['join_url']
+                data_dict['conf_link'] = url
                 with conn() as c:
                     c = c.cursor()
                     c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
             except:
                 log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
+                data_dict['conf_link'] = ''
             # Calendar
             Invite.makecalevent(data_dict)
         # Email
@@ -409,7 +414,7 @@ class Admin:
             removedates.append(removedates[-1]+day)
         takendates += removedates
         takendates = ','.join("'%s'"%d.strftime('%Y-%m-%d') for d in takendates)
-        return templates.get_template('admin_invite.html').render(takendates=takendates)
+        return templates.get_template('admin_invite.html').render(takendates=takendates,location=conf('event.defaultlocation'))
 
     @cherrypy.expose
     def invitedo(self, **kwargs):
@@ -425,11 +430,12 @@ class Admin:
         send = 'send' in kwargs
         host = kwargs.get('hname')
         host_email = kwargs.get('hemail')
+        location = kwargs.get('location')
         uid = str(uuid.uuid4())
         try:
             with conn() as c:
-                c.execute('INSERT INTO invitations (uuid, email, dates, warmup, host, host_email, confirmed_date) VALUES (?, ?, ?, ?, ?, ?, NULL)',
-                          (uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email))
+                c.execute('INSERT INTO invitations (uuid, email, dates, warmup, host, host_email, confirmed_date, location) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)',
+                          (uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email, location))
         except:
             log.error('Could not insert '%((uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email),))
             return templates.get_template('admin_blank.html').render(content='There was a problem with the database! Try again!')
@@ -562,9 +568,9 @@ class Admin:
         if test=='make_meeting':
             zoom_meet_config = {'start_time':str(datetime.datetime.now()),
                                 'topic': 'Test Meeting '+conf('event.name'),
-                                **ZOOM_TEMPLATE}
+                                **ZOOM_TEMPLATE()}
             j = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()
-            zoom_meet_config = {'start_time':str(datetime.datetime.now()), **ZOOM_TEMPLATE}
+            zoom_meet_config = {'start_time':str(datetime.datetime.now()), **ZOOM_TEMPLATE()}
             j = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()
         else:
             j = Zoom.get('/users/me').json()

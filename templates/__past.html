@@ -6,7 +6,7 @@
 <div class="col-md-6 col-md-offset-3">
 {% if records %}
 <h1>Past Seminars</h1>
-{% for date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link in records %}
+{% for date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location in records %}
   {% set footer %}
     {% if recording_link %}
     <a href="{{recording_link if conf_link else ''}}">video recording</a>
