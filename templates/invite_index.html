@@ -63,6 +63,11 @@
       <div class="panel panel-default">
       <div class="panel-heading">Administrative Details (populated by the host)</div>
       <div class="panel-body">
+      <div>
+      {{preevent_message}}
+      </div>
+      </div>
+      <div class="panel-footer">
       <div class="form-group">
         <label for="location">Location</label>
         <input type="text" required class="form-control" id="location" name="location" value="{{old_data.get('location') if old_data.get('location') else invite_location}}">

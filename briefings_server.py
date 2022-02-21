@@ -159,7 +159,7 @@ class Root:
             with conn() as c:
                 warmup = warmup and not (warmup=='False' or warmup=='0') # TODO this should not be such a mess to parse
                 parseddate = dateutil.parser.isoparse(date)
-                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
+                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link, location FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
                 if not warmup:
                     has_warmup = c.execute('SELECT COUNT(*) FROM events WHERE warmup=? AND date=?', (True, parseddate)).fetchone()[0]
             future = talk[0]>datetime.datetime.now()
@@ -241,6 +241,11 @@ def available_dates(uuid, table='invitations', daysoffset=0):
     good_dates = sorted([d for d in good_dates if d>today])
     return good_dates, confirmed_date
 
+def linkify(url):
+    if url.startswith('https://'):
+        return '<a href="%s">%s</a>'%(url,url[8:])
+    else:
+        return '<a href="https://%s">%s</a>'%(url,url)
 
 @cherrypy.popargs('uuid')
 class Invite:
@@ -257,7 +262,7 @@ class Invite:
             log.error('Attempted opening unknown invite %s '%(uuid,))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
         good_dates, confirmed_date = available_dates(uuid, daysoffset=conf('invitations.neededdays'))
-        args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link'
+        args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link, sched_link'
         if confirmed_date:
             with conn() as c:
                 c = c.cursor()
@@ -266,9 +271,24 @@ class Invite:
                 data = c.fetchone()
             args_s = args.split(', ')
             old_data = dict(zip(args_s, data))
+            preevent_message = Invite.preevent_message(uuid,confirmed_date,warmup,old_data,host)
         else:
             old_data = dict()
-        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location)
+            preevent_message = ''
+        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location, preevent_message=preevent_message)
+
+    @staticmethod
+    def preevent_message(uuid,confirmed_date,warmup,data,host):
+        preevent_message = conf('invitations.preevent_message').format(
+            host=host,
+            videoconf=linkify(data['conf_link']),
+            private_details=linkify(conf('server.url')+'/invite/'+uuid),
+            schedule=linkify(data['sched_link']) if data['sched_link'] else 'not yet available',
+            public_details=linkify(conf('server.url')+'/event/%s/%s'%(confirmed_date,warmup)),
+            warmup_talk='schedule not finalized', # TODO
+            will_record='Thank you for permitting us to record the talk' if data['recording_consent'] else 'The talk will not be recorded, as you have instructed us'
+            )
+        return preevent_message
 
     @cherrypy.expose
     def do(self, **kwargs):
@@ -325,7 +345,7 @@ class Invite:
             # Calendar
             Invite.makecalevent(data_dict)
         # Email
-        text_content = subject = '%s, you submitted your talk for %s!'%(data_dict['speaker'], data_dict['date'])
+        text_content = subject = '%s, updates about your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+uuid
         public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
         html_content = '<p>You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
@@ -343,10 +363,10 @@ class Invite:
             description += 'Video conf at: '+data_dict["conf_link"]+'\n\n'
         if data_dict["location"]:
             description += 'In-person at: '+data_dict["location"]+'\n\n'
-        creds = Google.getcreds()
-        with build('calendar','v3',credentials=creds) as service:
-            for calid in conf('google.calendarid'):
-                try:
+        try:
+            creds = Google.getcreds()
+            with build('calendar','v3',credentials=creds) as service:
+                for calid in conf('google.calendarid'):
                     j = service.events().quickAdd(calendarId=calid,text=title).execute()
                     event_id = j["id"]
                     j["start"]["dateTime"] = date.isoformat('T')
@@ -356,8 +376,8 @@ class Invite:
                             "end": j["end"],
                     "description": description}
                     j = service.events().patch(calendarId=calid,eventId=event_id,body=nj).execute()
-                except:
-                    log.error('Could not create a calendar event in %s for %s %s'%(calid, title, date))
+        except:
+            log.error('Could not create a calendar event in %s for %s %s'%(calid, title, date))
 
 
 
