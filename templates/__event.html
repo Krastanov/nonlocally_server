@@ -15,9 +15,7 @@
     {% if future and not warmup %}
     {{event.location_and_conf_link(location, conf_link)}}
     {% else %}
-      {% if recording_link %}
-      <a href="{{recording_link if recording_link else ''}}">video recording</a>
-      {% elif recording_consent %}
+      {% if recording_consent %}
       <!--video recording link will be posted shortly-->
       {% else %}
       this talk was not recorded

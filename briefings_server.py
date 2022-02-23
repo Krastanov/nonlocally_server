@@ -134,7 +134,7 @@ class Root:
     def index(self):
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
-        now = datetime.datetime.now() + datetime.timedelta(days=1)
+        now = datetime.datetime.now() - datetime.timedelta(days=1)
         records = [t for t in all_talks if t[0]>now]
         return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'), banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'), ical=conf('google.calendarical'))
 
@@ -142,7 +142,7 @@ class Root:
     def iframeupcoming(self):
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
-        now = datetime.datetime.now() + datetime.timedelta(days=1)
+        now = datetime.datetime.now() - datetime.timedelta(days=1)
         records = [t for t in all_talks if t[0]>now]
         return templates.get_template('__iframeupcoming.html').render(records=records)
 
@@ -150,7 +150,9 @@ class Root:
     def past(self):
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location FROM events WHERE warmup=0 ORDER BY date DESC'))
-        records = [t for t in all_talks if t[0]<datetime.datetime.now()]
+        now = datetime.datetime.now() 
+        yesterday = datetime.datetime.now()-datetime.timedelta(days=1)
+        records = [(*t,t[0]>yesterday) for t in all_talks if t[0]<now]
         return templates.get_template('__past.html').render(records=records)
 
     @cherrypy.expose
@@ -162,7 +164,7 @@ class Root:
                 talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link, location FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
                 if not warmup:
                     has_warmup = c.execute('SELECT COUNT(*) FROM events WHERE warmup=? AND date=?', (True, parseddate)).fetchone()[0]
-            future = talk[0]>datetime.datetime.now()
+            future = talk[0]>datetime.datetime.now()+datetime.timedelta(days=1)
         except:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
