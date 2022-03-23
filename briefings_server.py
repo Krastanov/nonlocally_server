@@ -264,7 +264,7 @@ class Invite:
             log.error('Attempted opening unknown invite %s '%(uuid,))
             return templates.get_template('invite_blank.html').render(content='This invation is invalid! Please contact whomever sent you the invite!')
         good_dates, confirmed_date = available_dates(uuid, daysoffset=conf('invitations.neededdays'))
-        args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link, sched_link'
+        args = 'speaker, affiliation, bio, title, abstract, recording_consent, conf_link, sched_link, location'
         if confirmed_date:
             with conn() as c:
                 c = c.cursor()
@@ -379,7 +379,7 @@ class Invite:
                     "description": description}
                     j = service.events().patch(calendarId=calid,eventId=event_id,body=nj).execute()
         except:
-            log.error('Could not create a calendar event in %s for %s %s'%(calid, title, date))
+            log.error('Could not create a calendar event for %s %s'%(title, date))
 
 
 
