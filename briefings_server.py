@@ -455,7 +455,8 @@ class Invite:
     @staticmethod        
     def makesched(data_dict):
         try:
-            padid = str(uuid.uuid4()).replace('-','')
+            prefix = data_dict['date'].strftime('%Y%m%d')
+            padid = prefix+str(uuid.uuid4()).replace('-','')
             #etherpad.copyPad(conf('etherpad.scheduletemplate'), padid)
             etherpad.createPad(padid)
             templatehtml = etherpad.getHtml(conf('etherpad.scheduletemplate'))['html']
