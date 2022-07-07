@@ -5,6 +5,7 @@ import email
 import email.mime
 import email.mime.base
 import hashlib
+import html
 import itertools
 import io
 import json
@@ -25,6 +26,7 @@ from cherrypy.process.plugins import Monitor
 import jinja2
 import dateutil
 import dateutil.parser
+import py_etherpad
 import rauth
 import requests
 from google_auth_oauthlib.flow import Flow
@@ -137,6 +139,7 @@ def ZOOM_TEMPLATE():
     }
     }
 
+etherpad = py_etherpad.EtherpadLiteClient(apiKey=conf("etherpad.apikey"),baseUrl=conf("etherpad.url")+'/api')
 
 # Scheduled Events
 
@@ -358,7 +361,7 @@ class Invite:
 
     @cherrypy.expose
     def do(self, **kwargs):
-        uuid = kwargs['uuid']
+        euuid = kwargs['uuid']
         args = 'date, speaker, affiliation, bio, title, abstract, warmup, email, recording_consent, location'
         args_s = args.split(', ')
         data = []
@@ -370,7 +373,7 @@ class Invite:
                 v = v == 'True' or v == 'Yes'
             data.append(v)
         data[0] = dateutil.parser.isoparse(data[0])
-        good_dates, confirmed_date = available_dates(uuid)
+        good_dates, confirmed_date = available_dates(euuid)
         data_dict = dict(zip(args_s, data))
         if confirmed_date and confirmed_date < datetime.datetime.now():
             return templates.get_template('invite_blank.html').render(content='Can not edit past events!')
@@ -380,7 +383,7 @@ class Invite:
             c = c.cursor()
             args += ', host, host_email'
             placeholders += ',?,?'
-            c.execute('SELECT email, warmup, host, host_email FROM invitations WHERE uuid=?;', (uuid,))
+            c.execute('SELECT email, warmup, host, host_email FROM invitations WHERE uuid=?;', (euuid,))
             email, warmup, host, host_email  = c.fetchone()
             data.extend([host, host_email])
             c.execute("""INSERT INTO events (%s) VALUES (%s)
@@ -391,7 +394,7 @@ class Invite:
                          ),
                       data)
             c.execute('UPDATE invitations SET confirmed_date=? WHERE uuid=?',
-                      (data[0],uuid))
+                      (data[0],euuid))
 
         # Zoom and Calendar and Drive
         if not confirmed_date:
@@ -412,11 +415,30 @@ class Invite:
             Invite.makecalevent(data_dict)
         # Email
         text_content = subject = '%s, updates about your talk for %s!'%(data_dict['speaker'], data_dict['date'])
-        url = 'https://'+conf('server.url')+'/invite/'+uuid
+        url = 'https://'+conf('server.url')+'/invite/'+euuid
         public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
         html_content = '<p>You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
         send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
-
+        # Etherpad schedule
+        try:
+            templatehtml = etherpad.getHtml(conf('etherpad.scheduletemplate'))['html']
+            details_link = f'<a href="{public_url}">public_url</a>'
+            schedhtml = templatehtml.format(
+                    details_url=details_link,
+                    speaker=html.escape(data_dict['speaker']),
+                    affiliation=html.escape(data_dict['affiliation']),
+                    date=html.escape(str(data_dict['date'])),
+                    location=html.escape(data_dict['location']),
+                    videoconf_link=data_dict['conf_link']
+                    )
+            padid = str(uuid.uuid4()).replace('-','')
+            sched_url = conf('etherpad.url')+'/p/'+padid 
+            etherpad.setHtml(padid, schedhtml)
+        except:
+            log.error('Etherpad problems for %s %s'%(data_dict['date'], data_dict['warmup']))
+            sched_url = None
+        with conn() as c:
+            c.execute('UPDATE events SET sched_link=? WHERE date=? AND warmup=?', (sched_url, data_dict['date'], data_dict['warmup']))
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
 
     @staticmethod
