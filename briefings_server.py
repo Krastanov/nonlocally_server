@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 import urllib
+import urllib.parse
 import uuid
 
 import cherrypy
@@ -138,6 +139,8 @@ def ZOOM_TEMPLATE():
       "waiting_room": True
     }
     }
+
+# Etherpad
 
 etherpad = py_etherpad.EtherpadLiteClient(apiKey=conf("etherpad.apikey"),baseUrl=conf("etherpad.url")+'/api')
 
@@ -396,7 +399,7 @@ class Invite:
             c.execute('UPDATE invitations SET confirmed_date=? WHERE uuid=?',
                       (data[0],euuid))
 
-        # Zoom and Calendar and Drive
+        # Zoom and Calendar and Schedule
         if not confirmed_date:
             # Zoom
             zoom_meet_config = {'start_time': data_dict['date'].isoformat('T'),
@@ -413,32 +416,14 @@ class Invite:
                 data_dict['conf_link'] = ''
             # Calendar
             Invite.makecalevent(data_dict)
+            # Sched
+            Invite.makesched(data_dict)
         # Email
         text_content = subject = '%s, updates about your talk for %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+euuid
         public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
         html_content = '<p>You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
         send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
-        # Etherpad schedule
-        try:
-            templatehtml = etherpad.getHtml(conf('etherpad.scheduletemplate'))['html']
-            details_link = f'<a href="{public_url}">public_url</a>'
-            schedhtml = templatehtml.format(
-                    details_url=details_link,
-                    speaker=html.escape(data_dict['speaker']),
-                    affiliation=html.escape(data_dict['affiliation']),
-                    date=html.escape(str(data_dict['date'])),
-                    location=html.escape(data_dict['location']),
-                    videoconf_link=data_dict['conf_link']
-                    )
-            padid = str(uuid.uuid4()).replace('-','')
-            sched_url = conf('etherpad.url')+'/p/'+padid 
-            etherpad.setHtml(padid, schedhtml)
-        except:
-            log.error('Etherpad problems for %s %s'%(data_dict['date'], data_dict['warmup']))
-            sched_url = None
-        with conn() as c:
-            c.execute('UPDATE events SET sched_link=? WHERE date=? AND warmup=?', (sched_url, data_dict['date'], data_dict['warmup']))
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
 
     @staticmethod
@@ -466,6 +451,30 @@ class Invite:
                     j = service.events().patch(calendarId=calid,eventId=event_id,body=nj).execute()
         except:
             log.error('Could not create a calendar event for %s %s'%(title, date))
+
+    @staticmethod        
+    def makesched(data_dict):
+        try:
+            padid = str(uuid.uuid4()).replace('-','')
+            #etherpad.copyPad(conf('etherpad.scheduletemplate'), padid)
+            etherpad.createPad(padid)
+            templatehtml = etherpad.getHtml(conf('etherpad.scheduletemplate'))['html']
+            public_url = 'https://'+conf('server.url')+'/event/'+urllib.parse.quote(str(data_dict['date']))+'/'+str(data_dict['warmup'])
+            schedhtml = templatehtml.format(
+                    details_url=public_url,
+                    speaker=html.escape(data_dict['speaker']),
+                    affiliation=html.escape(data_dict['affiliation']),
+                    date=html.escape(str(data_dict['date'])),
+                    location=html.escape(data_dict['location']),
+                    videoconf_link=data_dict['conf_link']
+                    )
+            sched_url = conf('etherpad.url')+'/p/'+padid 
+            etherpad.setHtml(padid, schedhtml)
+        except Exception as e:
+            log.error('Etherpad problems for %s %s: %s'%(data_dict['date'], data_dict['warmup'], e))
+            sched_url = None
+        with conn() as c:
+            c.execute('UPDATE events SET sched_link=? WHERE date=? AND warmup=?', (sched_url, data_dict['date'], data_dict['warmup']))
 
 
 
@@ -663,6 +672,8 @@ class Admin:
             return templates.get_template('admin_blank.html').render(content='Failed attempt, check logs!')
         if action == 'cal':
             Invite.makecalevent(data_dict)
+        elif action == 'sched':
+            Invite.makesched(data_dict)
         else:
             return templates.get_template('admin_blank.html').render(content='Unknown operation attempted!')
         return templates.get_template('admin_blank.html').render(content='Modification successful!')
