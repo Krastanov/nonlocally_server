@@ -21,6 +21,7 @@ import urllib
 import uuid
 
 import cherrypy
+from cherrypy.process.plugins import Monitor
 import jinja2
 import dateutil
 import dateutil.parser
@@ -47,10 +48,18 @@ sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
 
 if not os.path.exists(os.path.join(file_dir,'database.sqlite')):
     raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
-def conn():
+def conn(d=False):
     conn = sqlite3.connect(os.path.join(file_dir,'database.sqlite'), detect_types=sqlite3.PARSE_DECLTYPES)
     conn.execute("PRAGMA foreign_keys = 1")
+    if d:
+        conn.row_factory = dict_factory
     return conn
+
+def dict_factory(cursor, row): # TODO use this everywhere
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
 def conf(k):
     v, vtype = next(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT value, valuetype FROM config WHERE key=?',(k,)))
@@ -128,6 +137,61 @@ def ZOOM_TEMPLATE():
     }
     }
 
+
+# Scheduled Events
+
+def check_upcoming_talks_and_email():
+    try:
+        log.debug('Checking whether we need to send an email announcement for talks')
+        with conn(d=True) as c:
+            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+10 day')").fetchall()
+            all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
+        for r in upcoming_talks:
+            event = conf('event.name')
+            datestr = r['date'].strftime('%b %-d %-I:%M%p')
+            subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
+            priv_subject = f"Meet the speaker - {r['title']} by {r['speaker']}"
+            public_url = 'https://'+conf('server.url')+'/event/'+str(r['date'])+'/'+str(r['warmup'])
+            upcoming_url = 'https://'+conf('server.url')
+            if all_upcoming_talks:
+                _html = "".join([f"<p>{t['date']} | {t['title']} - {t['speaker']}</p>" for t in all_upcoming_talks if t!=r])
+                _plain = "\n".join([f"{t['date']} | {t['title']} - {t['speaker']}" for t in all_upcoming_talks if t!=r])
+                future_talks_html = f"<div><h2>Future talks (<a href=\"{upcoming_url}\">listed at {upcoming_url}</a>)</h2>{_html}</div>"
+                future_talks_plain = f"\n\nFuture talks listed at {upcoming_url}\n{_plain}"
+            else:
+                future_talks_html = f"<div><a href=\"{upcoming_url}\">{upcoming_url}</div>"
+                future_talks_plain = f"\n\n{upcoming_url}"
+            priv_signup_html = f"<div><h2>Private meeting signup</h2><a href=\"{r['sched_link']}\">{r['sched_link']}</a></div>"
+            priv_signup_plain = f"\nPrivate meeting signup: {r['sched_link']}"
+            html = f"""
+            <strong>{event} - {datestr}</strong>
+            <h2>{r['title']}</h2>
+            <h3>{r['speaker']} - {r['affiliation']}</h3>
+            <div><p>Abstract: </p><p style=\"white-space:pre-wrap;\">{r['abstract']}</p></div>
+            <div><p>Bio:</p><p style=\"white-space:pre-wrap;\">{r['bio']}</p></div><div></div>
+            <div>
+            <p><strong>Video Conference link</strong>: <a href=\"{r['conf_link']}\">{r['conf_link']}</a></p>
+            <p><strong>More details</strong>: <a href=\"{public_url}\">{public_url}</a></p>
+            <p><strong>Location</strong>: {r['location']}</p>
+            </div>"""
+            plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nVideo Conference link: {r['conf_link']}\nMore details: {public_url}\nLocation: {r['location']}"
+            speaker_email = r['email']
+            host_email = r['host_email']
+            mailing_list_email = conf("email.mailing_list")
+            priv_mailing_list_email = conf("email.priv_mailing_list")
+            send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
+            send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email])
+            with conn() as c:
+                c.execute('UPDATE events SET announced=1 WHERE date=? AND warmup=?',
+                          (r['date'],r['warmup']))
+    except Exception as e:
+        log.error('Failure in the email annoucements scheduled job due to %s'%e)
+
+scheduled_events = [
+    (check_upcoming_talks_and_email, 3600*24),
+        ]
+
+# CherryPy server
 
 class Root:
     @cherrypy.expose
@@ -807,6 +871,8 @@ if __name__ == '__main__':
     cherrypy.tree.mount(Dev(), '/dev', sys_password_conf)
     cherrypy.tree.mount(Zoom(), '/zoom', {})
     cherrypy.tree.mount(Google(), '/google', {})
+    for (f,t) in scheduled_events:
+        Monitor(cherrypy.engine, f, frequency=t).subscribe()
     cherrypy.engine.start()
     cherrypy.engine.block()
-    log.info('server stopping')
+    log.info('server stoped')
