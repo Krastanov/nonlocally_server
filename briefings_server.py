@@ -832,7 +832,7 @@ if __name__ == '__main__':
     cherrypy.config.update({'server.socket_host'     : '127.0.0.1',
                             'server.socket_port'     : conf('server.port'),
                             'tools.encode.on'        : True,
-                            #'environment'            : 'production',
+                            'environment'            : 'production',
                             'tools.sessions.on'      : True,
                             'tools.sessions.timeout' : 60,
                             'tools.caching.on'       : False,
