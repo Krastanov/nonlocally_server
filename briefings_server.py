@@ -150,7 +150,7 @@ def check_upcoming_talks_and_email():
     try:
         log.debug('Checking whether we need to send an email announcement for talks')
         with conn(d=True) as c:
-            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+30 day')").fetchall()
+            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+9 day')").fetchall()
             all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
         for r in upcoming_talks:
             event = conf('event.name')
@@ -181,8 +181,8 @@ def check_upcoming_talks_and_email():
             <p><strong>Location</strong>: {r['location']}</p>
             </div>"""
             plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nVideo Conference link: {r['conf_link']}\nMore details: {public_url}\nLocation: {r['location']}"
-            speaker_email = 'testspeaker@krastanov.org'#r['email']
-            host_email = 'testhost@krastanov.org'#r['host_email']
+            speaker_email = r['email']
+            host_email = r['host_email']
             mailing_list_email = conf("email.mailing_list")
             priv_mailing_list_email = conf("email.priv_mailing_list")
             send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
@@ -194,7 +194,7 @@ def check_upcoming_talks_and_email():
         log.error('Failure in the email annoucements scheduled job due to %s'%e)
 
 scheduled_events = [
-    (check_upcoming_talks_and_email, 3600*24),
+    (check_upcoming_talks_and_email, 3600*12),
         ]
 
 # CherryPy server
