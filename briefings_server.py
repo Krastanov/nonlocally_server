@@ -289,8 +289,7 @@ class Apply:
             c = c.cursor()
             c.execute('INSERT INTO applications (%s) VALUES (%s)'%(args, placeholders),
                       data)
-        text_content = 'Submission successful! You will receive an email with a decision, depending on availability, before the talk.'
-        html_content = '<p>%s</p><h2>%s</h2><strong>%s</strong><p>%s</p><p>%s</p><p>%s</p>'%(text_content, *[data_dict[k] for k in ['title','speaker','abstract','bio','previous_records']])
+        text_content = html_content = 'You or someone on your behalf applied to give a warmup talk for our seminar series. The submission was successful. You will receive an email with a decision, depending on availability, before the talk.'
         subject = 'Speaker application: %s'%data_dict['title']
         send_email(text_content, html_content, data_dict['email'], subject)
         return templates.get_template('apply_blank.html').render(content=text_content)
