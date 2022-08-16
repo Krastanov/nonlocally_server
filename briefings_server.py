@@ -313,10 +313,13 @@ def available_dates(uuid, table='invitations', daysoffset=0):
     return good_dates, confirmed_date
 
 def linkify(url):
-    if url.startswith('https://'):
-        return '<a href="%s">%s</a>'%(url,url[8:])
+    if url:
+        if url.startswith('https://'):
+            return '<a href="%s">%s</a>'%(url,url[8:])
+        else:
+            return '<a href="https://%s">%s</a>'%(url,url)
     else:
-        return '<a href="https://%s">%s</a>'%(url,url)
+        return "<span>no link available yet</span>"
 
 @cherrypy.popargs('uuid')
 class Invite:
@@ -401,18 +404,7 @@ class Invite:
         # Zoom and Calendar and Schedule
         if not confirmed_date:
             # Zoom
-            zoom_meet_config = {'start_time': data_dict['date'].isoformat('T'),
-                                'topic': conf('event.name')+": "+data_dict['speaker'],
-                                **ZOOM_TEMPLATE()}
-            try:
-                url = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()['join_url']
-                data_dict['conf_link'] = url
-                with conn() as c:
-                    c = c.cursor()
-                    c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
-            except:
-                log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
-                data_dict['conf_link'] = ''
+            Invite.makezoom(data_dict)
             # Calendar
             Invite.makecalevent(data_dict)
             # Sched
@@ -424,6 +416,21 @@ class Invite:
         html_content = '<p>You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
         send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
+
+    @staticmethod
+    def makezoom(data_dict):
+        zoom_meet_config = {'start_time': data_dict['date'].isoformat('T'),
+                            'topic': conf('event.name')+": "+data_dict['speaker'],
+                            **ZOOM_TEMPLATE()}
+        try:
+            url = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()['join_url']
+            data_dict['conf_link'] = url
+            with conn() as c:
+                c = c.cursor()
+                c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
+        except:
+            log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
+            data_dict['conf_link'] = ''
 
     @staticmethod
     def makecalevent(data_dict):
@@ -670,7 +677,9 @@ class Admin:
         except:
             log.error('Attempted modifying unknown talk %s %s'%(date, warmup))
             return templates.get_template('admin_blank.html').render(content='Failed attempt, check logs!')
-        if action == 'cal':
+        if action == 'zoom':
+            Invite.makezoom(data_dict)
+        elif action == 'cal':
             Invite.makecalevent(data_dict)
         elif action == 'sched':
             Invite.makesched(data_dict)

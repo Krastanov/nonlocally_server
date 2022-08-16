@@ -5,6 +5,7 @@
 {% for uuid, email, confirmed_date, dates, accepted in all_invites %}
 <tr>
 <td><a href="/invite/{{uuid}}">{{email}}</a></td><td>{{accepted}}</td>
+<td>{% if confirmed_date %}<a href="/admin/modevent/{{confirmed_date}}/0/zoom">make zoom room</a>{% endif %}</td>
 <td>{% if confirmed_date %}<a href="/admin/modevent/{{confirmed_date}}/0/cal">make calendar event</a>{% endif %}</td>
 <td>{% if confirmed_date %}<a href="/admin/modevent/{{confirmed_date}}/0/sched">make schedule page</a>{% endif %}</td>
 </tr>
