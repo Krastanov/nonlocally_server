@@ -20,6 +20,7 @@ CREATE TABLE events
  host_email TEXT,
  location TEXT,
  announced BOOLEAN DEFAULT 0,
+ recording_processed BOOLEAN DEFAULT 0,
  PRIMARY KEY (date, warmup)
 );
 

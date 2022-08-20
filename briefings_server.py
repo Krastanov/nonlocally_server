@@ -51,7 +51,7 @@ sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
 
 if not os.path.exists(os.path.join(file_dir,'database.sqlite')):
     raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
-def conn(d=False):
+def conn(d=False): # TODO make d=True default
     conn = sqlite3.connect(os.path.join(file_dir,'database.sqlite'), detect_types=sqlite3.PARSE_DECLTYPES)
     conn.execute("PRAGMA foreign_keys = 1")
     if d:
@@ -150,7 +150,7 @@ def check_upcoming_talks_and_email():
     try:
         log.debug('Checking whether we need to send an email announcement for talks')
         with conn(d=True) as c:
-            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+9 day')").fetchall()
+            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+8 day')").fetchall()
             all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
         for r in upcoming_talks:
             event = conf('event.name')
@@ -193,8 +193,41 @@ def check_upcoming_talks_and_email():
     except Exception as e:
         log.error('Failure in the email annoucements scheduled job due to %s'%e)
 
+def check_recordings_and_download():
+    try:
+        log.debug('Checking whether we have talks to download recordings for')
+        with conn(d=True) as c:
+            recorded_talks = c.execute("SELECT * FROM events WHERE recording_processed=0 AND recording_consent=1 AND date<date('now','-1 day')").fetchall()
+        for r in recorded_talks: # TODO this should be a function that can also be called from the admin panel
+            event = conf('event.name')
+            config = {"recording_authentication": False}
+            if r['conf_link']:
+                meetingid = r['conf_link'].split('/')[-1]
+            else:
+                log.error("the conf_link for %s is missing and we can not download anything"%r['date'])
+            Zoom.patch('/meetings/%s/recordings/settings'%meetingid, data=config)
+            rec = Zoom.get('/meetings/%s/recordings'%meetingid).json()
+            log.debug("zoom recording json: %s"%(json.dumps(rec,indent=4)))
+            rec = [r for r in rec['recording_files'] if r['recording_type']=='shared_screen_with_speaker_view']
+            rec = rec[0] # TODO something smarter than just downloading the first file you found
+            url = rec['download_url']
+            recording_folder = "/var/www/briefings/zoomrecdownload" # TODO this should be in config and the trailing / should be normalized
+            recording_name = str(r["date"]).replace(" ","_").replace(":","_") + '-' + str(int(r["warmup"]))
+            hls_cmd = f"ffmpeg -i {recording_folder}/{recording_name}.mp4 -profile:v baseline -level 3.0 -start_number 0 -hls_time 10 -hls_list_size 0 -f hls {recording_folder}/hls/{recording_name}.m3u8"
+            log.debug("started downloading %s"%recording_name)
+            os.system('wget "%s" -O "%s/%s.mp4"'%(url,recording_folder,recording_name))
+            log.debug("finished downloading and now converting %s"%recording_name)
+            os.system(f'{hls_cmd} &')
+            log.debug("converting is now running in the background %s"%recording_name)
+            with conn() as c:
+                c.execute('UPDATE events SET recording_processed=1 WHERE date=? AND warmup=?',
+                          (r['date'],r['warmup']))
+    except Exception as e:
+        log.error('Failure in downloading recording due to %s'%e)
+
 scheduled_events = [
     (check_upcoming_talks_and_email, 3600*12),
+    (check_recordings_and_download, 3600*12),
         ]
 
 # CherryPy server
@@ -204,7 +237,7 @@ class Root:
     def index(self):
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
-        now = datetime.datetime.now() - datetime.timedelta(days=1)
+        now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
         return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'), banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'), ical=conf('google.calendarical'))
 
@@ -212,17 +245,16 @@ class Root:
     def iframeupcoming(self):
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
-        now = datetime.datetime.now() - datetime.timedelta(days=1)
+        now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
         return templates.get_template('__iframeupcoming.html').render(records=records)
 
     @cherrypy.expose
     def past(self):
         with conn() as c:
-            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location FROM events WHERE warmup=0 ORDER BY date DESC'))
-        now = datetime.datetime.now() 
-        yesterday = datetime.datetime.now()-datetime.timedelta(days=1)
-        records = [(*t,t[0]>yesterday) for t in all_talks if t[0]<now]
+            all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location, recording_processed FROM events WHERE warmup=0 ORDER BY date DESC'))
+        now = datetime.datetime.now()
+        records = [t for t in all_talks if t[0]<now]
         return templates.get_template('__past.html').render(records=records)
 
     @cherrypy.expose
@@ -231,14 +263,13 @@ class Root:
             with conn() as c:
                 warmup = warmup and not (warmup=='False' or warmup=='0') # TODO this should not be such a mess to parse
                 parseddate = dateutil.parser.isoparse(date)
-                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link, location FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
+                talk = c.execute('SELECT date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link, location, recording_processed FROM events WHERE date=? AND warmup=? ORDER BY date DESC', (parseddate, warmup)).fetchone()
                 if not warmup:
                     has_warmup = c.execute('SELECT COUNT(*) FROM events WHERE warmup=? AND date=?', (True, parseddate)).fetchone()[0]
-            future = talk[0]>datetime.datetime.now()+datetime.timedelta(days=1)
         except:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
-        return templates.get_template('__event.html').render(talk=talk, future=future, has_warmup=not warmup and has_warmup)
+        return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup)
 
     @cherrypy.expose
     def about(self):
@@ -248,7 +279,7 @@ class Root:
 class Apply:
     @cherrypy.expose
     def index(self):
-        slots = self.available_talks()
+        slots = []#self.available_talks()
         if slots:
             return templates.get_template('apply_index.html').render(slots=slots)
         else:

@@ -10,9 +10,9 @@
 <div class="container">
 <div class="row">
 <div class="col-md-6 col-md-offset-3">
-{% for date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link, location in [talk] %}
+{% for date, warmup, speaker, affiliation, title, abstract, bio, conf_link, recording_consent, recording_link, location, recording_processed in [talk] %}
   {% set footer %}
-    {% if future and not warmup %}
+    {% if not recording_processed and not warmup %}
     {{event.location_and_conf_link(location, conf_link)}}
     {% else %}
       {% if recording_consent %}
@@ -22,7 +22,7 @@
       {% endif %}
     {% endif %}
   {% endset %}
-  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent and not future, footer, has_warmup) }}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent and recording_processed, footer, has_warmup) }}
 {% endfor %}
 </div>
 </div>
