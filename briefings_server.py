@@ -225,9 +225,14 @@ def check_recordings_and_download():
     except Exception as e:
         log.error('Failure in downloading recording due to %s'%e)
 
+def refresh_google_creds():
+    log.debug('checking whether we need a Google cred refresh')
+    Google.getcreds()
+
 scheduled_events = [
     (check_upcoming_talks_and_email, 3600*12),
     (check_recordings_and_download, 3600*12),
+    (refresh_google_creds, 3600*24*2),
         ]
 
 # CherryPy server
@@ -852,7 +857,7 @@ class Zoom:
 
 
 class Google:
-    scopes=['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive']
+    scopes=['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/calendar']
     @staticmethod
     def getflow():
         redirecturl = 'https://'+conf('server.url')+'/google/receive_code'
@@ -882,13 +887,18 @@ class Google:
 
     @staticmethod
     def getcreds():
+        log.debug('getting Google creds')
         tokens = json.loads(conf('google.credential_tokens'))
         creds = Credentials.from_authorized_user_info(tokens, scopes=Google.scopes)
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            j = creds.to_json()
-            tokens.update(json.loads(j))
-            updateconf('google.credential_tokens',json.dumps(tokens))
+            log.debug('the Google creds are actually old, so we try to refresh')
+            if creds.refresh_token:
+                log.debug('we have a refresh token, the Google creds refresh is proceeding')
+                creds.refresh(Request())
+                j = creds.to_json()
+                log.debug('updated Google creds with %s'%j)
+                tokens.update(json.loads(j))
+                updateconf('google.credential_tokens',json.dumps(tokens))
         return creds
 
 
