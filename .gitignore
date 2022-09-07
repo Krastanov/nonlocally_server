@@ -3,6 +3,6 @@ zoomrecdownload
 .ipynb_checkpoints
 __pycache__
 *.log
-config.sqlite
-database.sqlite
+*config.sqlite
+*database.sqlite
 *.swp

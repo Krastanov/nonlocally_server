@@ -45,7 +45,7 @@ if len(sys.argv)!=2:
     raise Exception('You need to specify the seminar series')
 SEMINAR_SERIES = sys.argv[1] 
 DB_FILENAME = '%s_database.sqlite' % SEMINAR_SERIES
-CONF_FILENAME = '%s_conf.sqlite' % SEMINAR_SERIES
+CONF_FILENAME = '%s_config.sqlite' % SEMINAR_SERIES
 LOG_FILENAME = '%s.log' % SEMINAR_SERIES
 if not os.path.exists(os.path.join(file_dir,DB_FILENAME)):
     raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
@@ -221,7 +221,7 @@ def check_recordings_and_download():
             rec = [r for r in rec['recording_files'] if r['recording_type']=='shared_screen_with_speaker_view']
             rec = rec[0] # TODO something smarter than just downloading the first file you found
             url = rec['download_url']
-            recording_folder = "/var/www/briefings/zoomrecdownload" # TODO this should be in config and the trailing / should be normalized
+            recording_folder = "/var/www/briefings/zoomrecdownload/"+SEMINAR_SERIES # TODO this should be in config and the trailing / should be normalized conf("zoom.recdownloads")
             recording_name = str(r["date"]).replace(" ","_").replace(":","_") + '-' + str(int(r["warmup"]))
             hls_cmd = f"ffmpeg -i {recording_folder}/{recording_name}.mp4 -profile:v baseline -level 3.0 -start_number 0 -hls_time 10 -hls_list_size 0 -f hls {recording_folder}/hls/{recording_name}.m3u8"
             log.debug("started downloading %s"%recording_name)
@@ -942,12 +942,12 @@ if __name__ == '__main__':
     customfiles_conf = {'/customfiles':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
-                              'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'customfiles'),
+                              'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'customfiles/'+SEMINAR_SERIES),
                              }}
     video_conf = {'/video':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
-                              'tools.staticdir.root' : conf('zoom.recdownloads'),
+                              'tools.staticdir.root' : conf('zoom.recdownloads')+'/'+SEMINAR_SERIES,
                              }}
     password_conf = {'/':{
                           'tools.auth_basic.on': True,
