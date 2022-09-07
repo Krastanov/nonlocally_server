@@ -15,6 +15,7 @@ import random
 import smtplib
 import sqlite3
 import socket
+import sys
 import tempfile
 import threading
 import time
@@ -40,8 +41,19 @@ from google.oauth2.credentials import Credentials
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
 
+if len(sys.argv)!=2:
+    raise Exception('You need to specify the seminar series')
+SEMINAR_SERIES = sys.argv[1] 
+DB_FILENAME = '%s_database.sqlite' % SEMINAR_SERIES
+CONF_FILENAME = '%s_conf.sqlite' % SEMINAR_SERIES
+LOG_FILENAME = '%s.log' % SEMINAR_SERIES
+if not os.path.exists(os.path.join(file_dir,DB_FILENAME)):
+    raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
+if not os.path.exists(os.path.join(file_dir,CONF_FILENAME)):
+    raise Exception('You need a configuration settings database file (maybe copy one of the already available and then edit it from the /admin page).')
 
-logfile = os.path.join(file_dir,'briefings.log')
+
+logfile = os.path.join(file_dir,LOG_FILENAME)
 logging.basicConfig(filename=logfile,format='%(asctime)s:%(name)s:%(levelname)s:%(message)s',level=logging.DEBUG)
 log = logging.getLogger('briefings')
 
@@ -49,10 +61,8 @@ log = logging.getLogger('briefings')
 sqlite3.register_adapter(bool, int)
 sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
 
-if not os.path.exists(os.path.join(file_dir,'database.sqlite')):
-    raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
 def conn(d=False): # TODO make d=True default
-    conn = sqlite3.connect(os.path.join(file_dir,'database.sqlite'), detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(os.path.join(file_dir,DB_FILENAME), detect_types=sqlite3.PARSE_DECLTYPES)
     conn.execute("PRAGMA foreign_keys = 1")
     if d:
         conn.row_factory = dict_factory
@@ -65,7 +75,7 @@ def dict_factory(cursor, row): # TODO use this everywhere
     return d
 
 def conf(k):
-    v, vtype = next(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT value, valuetype FROM config WHERE key=?',(k,)))
+    v, vtype = next(sqlite3.connect(os.path.join(file_dir,CONF_FILENAME)).execute('SELECT value, valuetype FROM config WHERE key=?',(k,)))
     if vtype=='str':
         return v
     elif vtype=='str[]':
@@ -80,7 +90,7 @@ def conf(k):
         raise ValueError('Unknown Value Type')
 
 def updateconf(k,v):
-    conn = sqlite3.connect(os.path.join(file_dir,'config.sqlite'))
+    conn = sqlite3.connect(os.path.join(file_dir,CONF_FILENAME))
     with conn:
         c = conn.cursor()
         c.execute('UPDATE config SET value=? WHERE key=?',(v,k))
@@ -446,10 +456,10 @@ class Invite:
             # Sched
             Invite.makesched(data_dict)
         # Email
-        text_content = subject = '%s, updates about your talk for %s!'%(data_dict['speaker'], data_dict['date'])
+        text_content = subject = '%s, schedule and updates for your talk on %s!'%(data_dict['speaker'], data_dict['date'])
         url = 'https://'+conf('server.url')+'/invite/'+euuid
         public_url = 'https://'+conf('server.url')+'/event/'+str(data_dict['date'])+'/'+str(data_dict['warmup'])
-        html_content = '<p>You can view updated information about your talk (videoconf link and private schedule) at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
+        html_content = '<p>Your schedule and a videoconf link are now available at <a href="%s">%s</a>. <strong>Keep this link private</strong>.<br>For the public announcement see <a href="%s">%s</a></p>'%(url, url, public_url, public_url) 
         send_email(text_content, html_content, data_dict['email'], subject, cc=[host_email] if host_email else [])
         return templates.get_template('invite_blank.html').render(content='Submission successful! '+html_content)
 
@@ -479,6 +489,9 @@ class Invite:
         if data_dict["location"]:
             description += 'In-person at: '+data_dict["location"]+'\n\n'
         try:
+            if not conf('google.calendarid'):
+                log.debug('No google calendars exist to submit events to')
+                return
             creds = Google.getcreds()
             with build('calendar','v3',credentials=creds) as service:
                 for calid in conf('google.calendarid'):
@@ -540,7 +553,7 @@ class Admin:
 
     @staticmethod
     def get_configrecords(access_levels=[]):
-        configrecords = list(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT key, value, valuetype, help, access_level FROM config ORDER BY key'))
+        configrecords = list(sqlite3.connect(os.path.join(file_dir,CONF_FILENAME)).execute('SELECT key, value, valuetype, help, access_level FROM config ORDER BY key'))
         configrecords = [r[:-1] for r in configrecords if r[-1] in [None]+access_levels]
         configrecords.sort(key = lambda _:_[0].split('.')[0])
         configrecords = itertools.groupby(configrecords, key = lambda _:_[0].split('.')[0])
@@ -554,9 +567,9 @@ class Admin:
     def update(self, *args, **kwargs):
         key = args[0]
         value = kwargs['value']
-        config_access = list(sqlite3.connect(os.path.join(file_dir,'config.sqlite')).execute('SELECT access_level FROM config WHERE key==?', (key,)))[0]
+        config_access = list(sqlite3.connect(os.path.join(file_dir,CONF_FILENAME)).execute('SELECT access_level FROM config WHERE key==?', (key,)))[0]
         if config_access not in [None]+self.access_levels:
-            with sqlite3.connect(os.path.join(file_dir,'config.sqlite')) as conn:
+            with sqlite3.connect(os.path.join(file_dir,CONF_FILENAME)) as conn:
                 conn.cursor().execute('UPDATE config SET value=? WHERE key=?', (value,key))
                 conn.commit()
             raise cherrypy.HTTPRedirect("../config#panel-%s"%key)
@@ -926,12 +939,12 @@ if __name__ == '__main__':
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'static'),
                              }}
-    customfiles_conf = {'/customfiles':{# Almost certainly this should be overwritten by your nginx config.
+    customfiles_conf = {'/customfiles':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'customfiles'),
                              }}
-    video_conf = {'/video':{# Almost certainly this should be overwritten by your nginx config.
+    video_conf = {'/video':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : conf('zoom.recdownloads'),
