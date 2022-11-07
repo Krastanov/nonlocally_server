@@ -160,13 +160,13 @@ def check_upcoming_talks_and_email():
     try:
         log.debug('Checking whether we need to send an email announcement for talks')
         with conn(d=True) as c:
-            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+8 day')").fetchall()
+            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+4 day')").fetchall()
             all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
         for r in upcoming_talks:
             event = conf('event.name')
             datestr = r['date'].strftime('%b %-d %-I:%M%p')
             subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
-            priv_subject = f"Meet the speaker - {r['title']} by {r['speaker']}"
+            priv_subject = f"Private Schedule - {r['title']} by {r['speaker']}"
             public_url = 'https://'+conf('server.url')+'/event/'+str(r['date'])+'/'+str(r['warmup'])
             upcoming_url = 'https://'+conf('server.url')
             if all_upcoming_talks:
@@ -177,8 +177,8 @@ def check_upcoming_talks_and_email():
             else:
                 future_talks_html = f"<div><a href=\"{upcoming_url}\">{upcoming_url}</div>"
                 future_talks_plain = f"\n\n{upcoming_url}"
-            priv_signup_html = f"<div><h2>Private meeting signup</h2><a href=\"{r['sched_link']}\">{r['sched_link']}</a></div>"
-            priv_signup_plain = f"\nPrivate meeting signup: {r['sched_link']}"
+            priv_signup_html = f"<div><h2>Private schedule</h2><a href=\"{r['sched_link']}\">{r['sched_link']}</a></div><div><strong>{conf('event.emailfooter')}</strong></div>"
+            priv_signup_plain = f"\nPrivate meeting signup: {r['sched_link']}\n{conf('event.emailfooter')}"
             html = f"""
             <strong>{event} - {datestr}</strong>
             <h2>{r['title']}</h2>
@@ -240,8 +240,8 @@ def refresh_google_creds():
     Google.getcreds()
 
 scheduled_events = [
-    (check_upcoming_talks_and_email, 3600*12),
-    (check_recordings_and_download, 3600*12),
+    (check_upcoming_talks_and_email, 3600*2),
+    (check_recordings_and_download, 3600*2),
     (refresh_google_creds, 3600*24*2),
         ]
 
@@ -923,6 +923,10 @@ def sysauth(realm,u,p):
     log.info('attempting to access protected area %s'%((realm,u,p),))
     return p==conf('sysadmin.pass') and u==conf('sysadmin.user')
 
+def allauth(realm,u,p):
+    log.info('attempting to access protected area %s'%((realm,u,p),))
+    return p==conf('server.allpass') and u==conf('server.alluser')
+
 if __name__ == '__main__':
     log.info('server starting')
     cherrypy.config.update({'server.socket_host'     : '127.0.0.1',
@@ -938,16 +942,19 @@ if __name__ == '__main__':
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'static'),
+                              'tools.auth_basic.on': False
                              }}
     customfiles_conf = {'/customfiles':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'customfiles/'+SEMINAR_SERIES),
+                              'tools.auth_basic.on': False
                              }}
     video_conf = {'/video':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
                               'tools.staticdir.root' : conf('zoom.recdownloads')+'/'+SEMINAR_SERIES,
+                              'tools.auth_basic.on': False
                              }}
     password_conf = {'/':{
                           'tools.auth_basic.on': True,
@@ -959,7 +966,15 @@ if __name__ == '__main__':
                               'tools.auth_basic.realm': 'sysadmin',
                               'tools.auth_basic.checkpassword': sysauth,
                              }}
-    cherrypy.tree.mount(Root(), '/', {**static_conf,**video_conf,**customfiles_conf})
+    root_conf = {**static_conf,**video_conf,**customfiles_conf}
+    if conf('server.alluser'):
+        root_conf = {**root_conf,
+                     '/':{
+                          'tools.auth_basic.on': True,
+                          'tools.auth_basic.realm': 'all',
+                          'tools.auth_basic.checkpassword': allauth,
+                         }}
+    cherrypy.tree.mount(Root(), '/', root_conf)
     cherrypy.tree.mount(Invite(), '/invite', {})
     cherrypy.tree.mount(Apply(), '/apply', {})
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
