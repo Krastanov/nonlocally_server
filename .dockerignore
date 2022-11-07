@@ -1,0 +1,5 @@
+# ignore everything in the git repo
+*
+
+# except for the requirements.txt, which is necessary at container build time
+!requirements.txt
