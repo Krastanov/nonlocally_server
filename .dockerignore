@@ -1,4 +1,4 @@
-# ignore everything in the git repo
+# ignore everything (this keeps the context small which lets docker build run faster and use the cache more frequently)
 *
 
 # except for the requirements.txt, which is necessary at container build time
