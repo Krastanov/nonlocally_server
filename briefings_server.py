@@ -41,12 +41,15 @@ from google.oauth2.credentials import Credentials
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
 
-if len(sys.argv)!=2:
-    raise Exception('You need to specify the seminar series')
-SEMINAR_SERIES = sys.argv[1] 
-DB_FILENAME = '%s_database.sqlite' % SEMINAR_SERIES
-CONF_FILENAME = '%s_config.sqlite' % SEMINAR_SERIES
-LOG_FILENAME = '%s.log' % SEMINAR_SERIES
+if len(sys.argv)!=3:
+    println("call as `python server.py SEMINAR_SERIES FOLDER_LOCATION`")
+    raise Exception('You need to specify the seminar series and folder location')
+SEMINAR_SERIES = sys.argv[1]
+FOLDER_LOCATION = sys.argv[2]
+DB_FILENAME = FOLDER_LOCATION+ '/%s_database.sqlite' % SEMINAR_SERIES
+CONF_FILENAME = FOLDER_LOCATION+ '/%s_config.sqlite' % SEMINAR_SERIES
+LOG_FILENAME = FOLDER_LOCATION+ '/%s.log' % SEMINAR_SERIES
+
 if not os.path.exists(os.path.join(file_dir,DB_FILENAME)):
     raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
 if not os.path.exists(os.path.join(file_dir,CONF_FILENAME)):
@@ -929,7 +932,7 @@ def allauth(realm,u,p):
 
 if __name__ == '__main__':
     log.info('server starting')
-    cherrypy.config.update({'server.socket_host'     : '127.0.0.1',
+    cherrypy.config.update({'server.socket_host'     : '0.0.0.0',
                             'server.socket_port'     : conf('server.port'),
                             'tools.encode.on'        : True,
                             'environment'            : 'production',
