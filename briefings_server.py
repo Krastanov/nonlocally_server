@@ -224,7 +224,7 @@ def check_recordings_and_download():
             rec = [r for r in rec['recording_files'] if r['recording_type']=='shared_screen_with_speaker_view']
             rec = rec[0] # TODO something smarter than just downloading the first file you found
             url = rec['download_url']
-            recording_folder = "/var/www/briefings/zoomrecdownload/"+SEMINAR_SERIES # TODO this should be in config and the trailing / should be normalized conf("zoom.recdownloads")
+            recording_folder = FOLDER_LOCATION+"/recordings/"+SEMINAR_SERIES # TODO this should be in config and the trailing / should be normalized conf("zoom.recdownloads")
             recording_name = str(r["date"]).replace(" ","_").replace(":","_") + '-' + str(int(r["warmup"]))
             hls_cmd = f"ffmpeg -i {recording_folder}/{recording_name}.mp4 -profile:v baseline -level 3.0 -start_number 0 -hls_time 10 -hls_list_size 0 -f hls {recording_folder}/hls/{recording_name}.m3u8"
             log.debug("started downloading %s"%recording_name)
