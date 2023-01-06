@@ -185,11 +185,9 @@ def check_upcoming_talks_and_email():
             <div><p>Abstract: </p><p style=\"white-space:pre-wrap;\">{r['abstract']}</p></div>
             <div><p>Bio:</p><p style=\"white-space:pre-wrap;\">{r['bio']}</p></div><div></div>
             <div>
-            <p><strong>Video Conference link</strong>: <a href=\"{r['conf_link']}\">{r['conf_link']}</a></p>
-            <p><strong>More details</strong>: <a href=\"{public_url}\">{public_url}</a></p>
-            <p><strong>Location</strong>: {r['location']}</p>
+            <p><strong>Location and Video Conference link</strong>: <a href=\"{public_url}\">{public_url}</a></p>
             </div>"""
-            plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nVideo Conference link: {r['conf_link']}\nMore details: {public_url}\nLocation: {r['location']}"
+            plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nLocation & Video Conference link: {public_url}"
             speaker_email = r['email']
             host_email = r['host_email']
             mailing_list_email = conf("email.mailing_list")
@@ -490,8 +488,6 @@ class Invite:
                     speaker=html.escape(data_dict['speaker']),
                     affiliation=html.escape(data_dict['affiliation']),
                     date=html.escape(str(data_dict['date'])),
-                    location=html.escape(data_dict['location']),
-                    videoconf_link=data_dict['conf_link']
                     )
             sched_url = conf('etherpad.url')+'/p/'+padid 
             etherpad.setHtml(padid, schedhtml)
