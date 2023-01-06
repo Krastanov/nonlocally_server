@@ -22,7 +22,7 @@
       {% endif %}
     {% endif %}
   {% endset %}
-  {{ event.event(date, speaker, affiliation, title, abstract, bio, warmup, recording_consent and recording_processed, footer, has_warmup) }}
+  {{ event.event(date, tz, speaker, affiliation, title, abstract, bio, warmup, recording_consent and recording_processed, footer, has_warmup) }}
 {% endfor %}
 </div>
 </div>

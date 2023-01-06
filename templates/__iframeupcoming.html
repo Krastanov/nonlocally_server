@@ -7,7 +7,7 @@
   {% set footer %}
   {{event.location_and_conf_link(location, conf_link)}}
   {% endset %}
-  {{ event.event(date, speaker, affiliation, title, abstract, bio, 0, False, footer) }}
+  {{ event.event(date, tz, speaker, affiliation, title, abstract, bio, 0, False, footer) }}
 {% endfor %} 
 {% else %}
 <p>No scheduled talks in the next week.</p>

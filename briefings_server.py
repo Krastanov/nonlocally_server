@@ -186,8 +186,9 @@ def check_upcoming_talks_and_email():
             <div><p>Bio:</p><p style=\"white-space:pre-wrap;\">{r['bio']}</p></div><div></div>
             <div>
             <p><strong>Location and Video Conference link</strong>: <a href=\"{public_url}\">{public_url}</a></p>
+            <p>Timezone: {conf('server.tzlong')}</p>
             </div>"""
-            plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nLocation & Video Conference link: {public_url}"
+            plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nLocation & Video Conference link: {public_url}\n\nTimezone: {conf('server.tzlong')}"
             speaker_email = r['email']
             host_email = r['host_email']
             mailing_list_email = conf("email.mailing_list")
@@ -246,7 +247,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
         now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
-        return templates.get_template('__index.html').render(records=records, banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'))
+        return templates.get_template('__index.html').render(records=records, banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'), tz=conf('server.tzlong'))
 
     @cherrypy.expose
     def iframeupcoming(self):
@@ -254,7 +255,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
         now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
-        return templates.get_template('__iframeupcoming.html').render(records=records)
+        return templates.get_template('__iframeupcoming.html').render(records=records, tz=conf('server.tzlong'))
 
     @cherrypy.expose
     def past(self):
@@ -262,7 +263,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location, recording_processed FROM events WHERE warmup=0 ORDER BY date DESC'))
         now = datetime.datetime.now()
         records = [t for t in all_talks if t[0]<now]
-        return templates.get_template('__past.html').render(records=records)
+        return templates.get_template('__past.html').render(records=records, tz=conf('server.tzlong'))
 
     @cherrypy.expose
     def event(self, date, warmup):
@@ -276,7 +277,7 @@ class Root:
         except:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
-        return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup)
+        return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup, tz=conf('server.tzlong'))
 
     @cherrypy.expose
     def about(self):
@@ -387,7 +388,7 @@ class Invite:
         else:
             old_data = dict()
             preevent_message = ''
-        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location, preevent_message=preevent_message)
+        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location, preevent_message=preevent_message, tz=conf('server.tzlong'))
 
     @staticmethod
     def preevent_message(uuid,confirmed_date,warmup,data,host):
@@ -487,7 +488,7 @@ class Invite:
                     details_url=public_url,
                     speaker=html.escape(data_dict['speaker']),
                     affiliation=html.escape(data_dict['affiliation']),
-                    date=html.escape(str(data_dict['date'])),
+                    date=html.escape(str(data_dict['date']))+f"  conf('server.tzlong')",
                     )
             sched_url = conf('etherpad.url')+'/p/'+padid 
             etherpad.setHtml(padid, schedhtml)
