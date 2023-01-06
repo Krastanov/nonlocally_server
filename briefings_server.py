@@ -31,10 +31,6 @@ import dateutil.parser
 import py_etherpad
 import rauth
 import requests
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 
 
 # TODO unify admin_judge, apply_index, and invite_index / unify the invitations and applications tables
@@ -238,14 +234,9 @@ def check_recordings_and_download():
     except Exception as e:
         log.error('Failure in downloading recording due to %s'%e)
 
-def refresh_google_creds():
-    log.debug('checking whether we need a Google cred refresh')
-    Google.getcreds()
-
 scheduled_events = [
     (check_upcoming_talks_and_email, 3600*2),
     (check_recordings_and_download, 3600*2),
-    (refresh_google_creds, 3600*24*2),
         ]
 
 # CherryPy server
@@ -257,7 +248,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
         now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
-        return templates.get_template('__index.html').render(records=records, calendarframe=conf('google.calendariframe'), banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'), ical=conf('google.calendarical'))
+        return templates.get_template('__index.html').render(records=records, banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'))
 
     @cherrypy.expose
     def iframeupcoming(self):
@@ -483,32 +474,7 @@ class Invite:
 
     @staticmethod
     def makecalevent(data_dict):
-        title = data_dict["speaker"]+": "+data_dict["title"]
-        date = data_dict["date"]
-        description = conf('event.name')+'\n\n'
-        description += data_dict["abstract"]+'\n\n'
-        if data_dict["conf_link"]:
-            description += 'Video conf at: '+data_dict["conf_link"]+'\n\n'
-        if data_dict["location"]:
-            description += 'In-person at: '+data_dict["location"]+'\n\n'
-        try:
-            if not conf('google.calendarid'):
-                log.debug('No google calendars exist to submit events to')
-                return
-            creds = Google.getcreds()
-            with build('calendar','v3',credentials=creds) as service:
-                for calid in conf('google.calendarid'):
-                    j = service.events().quickAdd(calendarId=calid,text=title).execute()
-                    event_id = j["id"]
-                    j["start"]["dateTime"] = date.isoformat('T')
-                    j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
-                    nj = {
-                            "start": j["start"],
-                            "end": j["end"],
-                    "description": description}
-                    j = service.events().patch(calendarId=calid,eventId=event_id,body=nj).execute()
-        except:
-            log.error('Could not create a calendar event for %s %s'%(title, date))
+        return
 
     @staticmethod        
     def makesched(data_dict):
@@ -731,8 +697,6 @@ class Admin:
             return templates.get_template('admin_blank.html').render(content='Failed attempt, check logs!')
         if action == 'zoom':
             Invite.makezoom(data_dict)
-        elif action == 'cal':
-            Invite.makecalevent(data_dict)
         elif action == 'sched':
             Invite.makesched(data_dict)
         else:
@@ -756,35 +720,6 @@ class Admin:
             j = Zoom.get('/users/me').json()
         content = '<pre>%s</pre>'%json.dumps(j, indent=4)
         return templates.get_template('admin_blank.html').render(content=content)
-
-    @cherrypy.expose
-    def authgoogle(self):
-        Google.start_auth()
-
-    @cherrypy.expose
-    def testgoogle(self, test=None):
-        creds = Google.getcreds()
-        if test=='calendar':
-            with build('calendar','v3',credentials=creds) as service:
-                j = service.calendars().get(calendarId=conf('google.calendarid')).execute()
-        elif test=='createevent':
-            with build('calendar','v3',credentials=creds) as service:
-                j = service.events().quickAdd(calendarId=conf('google.calendarid'),text="Internal meeting").execute()
-                event_id = j["id"]
-                date = datetime.datetime.now()
-                j["start"]["dateTime"] = date.isoformat('T')
-                j["end"]["dateTime"] = (date+datetime.timedelta(hours=1)).isoformat('T')
-                nj = {
-                        "start": j["start"],
-                        "end": j["end"],
-                        "description": "Internal meeting"}
-                j = service.events().patch(calendarId=conf('google.calendarid'),eventId=event_id,body=nj).execute()
-        else:
-            with build('drive','v3',credentials=creds) as service:
-                j = service.about().get(fields='*').execute()
-        content = '<pre>%s</pre>'%json.dumps(j, indent=4)
-        return templates.get_template('admin_blank.html').render(content=content)
-
 
 class SysAdmin(Admin):
     access_levels = ['sysadmin']
@@ -872,52 +807,6 @@ class Zoom:
         return templates.get_template('admin_blank.html').render(content=content)
 
 
-class Google:
-    scopes=['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/calendar']
-    @staticmethod
-    def getflow():
-        redirecturl = 'https://'+conf('server.url')+'/google/receive_code'
-        client_config = json.loads(conf('google.client_secrets'))
-        flow = Flow.from_client_config(client_config, scopes=Google.scopes, redirect_uri=redirecturl)
-        return flow
-
-    @cherrypy.expose
-    def index(self):
-        return "Google integration is controlled from the admin panel."
-
-    @staticmethod
-    def start_auth():
-        flow = Google.getflow()
-        passthrough_val = hashlib.sha256(os.urandom(1024)).hexdigest()
-        auth_url, state = flow.authorization_url(access_type='offline',state=passthrough_val,include_granted_scopes='true')
-        raise cherrypy.HTTPRedirect(auth_url)
-        
-    @cherrypy.expose
-    def receive_code(self, **kwargs):
-        flow = self.getflow()
-        flow.fetch_token(code=kwargs['code']) # TODO you should check passthrough_val...
-        j = flow.credentials.to_json()
-        updateconf('google.credential_tokens',j)
-        content = 'Success!'
-        return templates.get_template('admin_blank.html').render(content=content)
-
-    @staticmethod
-    def getcreds():
-        log.debug('getting Google creds')
-        tokens = json.loads(conf('google.credential_tokens'))
-        creds = Credentials.from_authorized_user_info(tokens, scopes=Google.scopes)
-        if creds.expired and creds.refresh_token:
-            log.debug('the Google creds are actually old, so we try to refresh')
-            if creds.refresh_token:
-                log.debug('we have a refresh token, the Google creds refresh is proceeding')
-                creds.refresh(Request())
-                j = creds.to_json()
-                log.debug('updated Google creds with %s'%j)
-                tokens.update(json.loads(j))
-                updateconf('google.credential_tokens',json.dumps(tokens))
-        return creds
-
-
 def auth(realm,u,p):
     log.info('attempting to access protected area %s'%((realm,u,p),))
     return p==conf('admin.pass') and u==conf('admin.user')
@@ -984,7 +873,6 @@ if __name__ == '__main__':
     cherrypy.tree.mount(SysAdmin(), '/sysadmin', sys_password_conf)
     cherrypy.tree.mount(Dev(), '/dev', sys_password_conf)
     cherrypy.tree.mount(Zoom(), '/zoom', {})
-    cherrypy.tree.mount(Google(), '/google', {})
     for (f,t) in scheduled_events:
         Monitor(cherrypy.engine, f, frequency=t).subscribe()
     cherrypy.engine.start()
