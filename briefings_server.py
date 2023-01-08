@@ -610,6 +610,25 @@ class Admin:
         return templates.get_template('admin_invitestatus.html').render(all_invites=all_invites)
 
     @cherrypy.expose
+    def eventstatus(self):
+        with conn() as c:
+            all_events = list(c.execute("""
+            SELECT
+                date, speaker,
+                events.email, events.host, events.location,
+                announced, recording_consent, recording_processed,
+                invitations.uuid
+            FROM events
+            LEFT JOIN invitations
+            ON
+                invitations.confirmed_date = events.date
+                AND invitations.warmup = events.warmup
+            WHERE events.warmup=0
+            ORDER BY date DESC
+                """))
+        return templates.get_template('admin_eventstatus.html').render(all_events=all_events)
+
+    @cherrypy.expose
     def applicationsstatus(self):
         with conn() as c:
             all_apps = list(c.execute('SELECT uuid, speaker, title FROM applications WHERE declined=0 AND confirmed_date IS NULL'))[::-1]

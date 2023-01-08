@@ -1,0 +1,32 @@
+{% extends "baseadmin.html" %}
+{% block row %}
+<h1>All Accepted Talk</h1>
+<table class="table-bordered table-hover table-condensed">
+<thead>
+<tr>
+<th scope="col"></th>
+<th scope="col"></th>
+<th scope="col">Speaker</th>
+<th scope="col">Date</th>
+<th scope="col">Host</th>
+<th scope="col">Location</th>
+<th scope="col">Announcements</h>
+<th scope="col">Recording Consent</th>
+<th scope="col">Recording Processed</th>
+</tr>
+</thead>
+{% for date, speaker, email, host, location, announced, recording_consent, recording_processed, uuid in all_events %}
+<tr>
+<td><a href="/event/{{date}}/0">public page</a></td>
+<td><a href="/invite/{{uuid}}">private page</a></td>
+<td>{{speaker}} &lt;{{email}}&gt;</td>
+<td>{{date}}</td>
+<td>{{host}}</td>
+<td>{{location}}</td>
+<td>{{announced}}</td>
+<td>{{recording_consent}}</td>
+<td>{{recording_processed}}</td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}
