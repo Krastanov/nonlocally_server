@@ -23,6 +23,7 @@
           <label for="date">Date</label><br>
           <input type="text" disabled class="form-control" id="date" name="date" value="{{confirmed_date}}"/>
           <input type="hidden" id="date" name="date" value="{{confirmed_date}}"/>
+	  <p>Timezone: {{tz}}</p>
         {% else %}
           <label for="date">Select a date: </label><br>
           {% for d in dates %}
