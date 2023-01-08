@@ -158,46 +158,47 @@ etherpad = py_etherpad.EtherpadLiteClient(apiKey=conf("etherpad.apikey"),baseUrl
 def check_upcoming_talks_and_email():
     try:
         log.debug('Checking whether we need to send an email announcement for talks')
-        with conn(d=True) as c:
-            upcoming_talks = c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now','+2 day') AND date<date('now','+4 day')").fetchall()
-            all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
-        for r in upcoming_talks:
-            event = conf('event.name')
-            datestr = r['date'].strftime('%b %-d %-I:%M%p')
-            subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
-            priv_subject = f"Private Schedule - {r['title']} by {r['speaker']}"
-            public_url = 'https://'+conf('server.url')+'/event/'+str(r['date'])+'/'+str(r['warmup'])
-            upcoming_url = 'https://'+conf('server.url')
-            if all_upcoming_talks:
-                _html = "".join([f"<p>{t['date']} | {t['title']} - {t['speaker']}</p>" for t in all_upcoming_talks if t!=r])
-                _plain = "\n".join([f"{t['date']} | {t['title']} - {t['speaker']}" for t in all_upcoming_talks if t!=r])
-                future_talks_html = f"<div><h2>Future talks (<a href=\"{upcoming_url}\">listed at {upcoming_url}</a>)</h2>{_html}</div>"
-                future_talks_plain = f"\n\nFuture talks listed at {upcoming_url}\n{_plain}"
-            else:
-                future_talks_html = f"<div><a href=\"{upcoming_url}\">{upcoming_url}</div>"
-                future_talks_plain = f"\n\n{upcoming_url}"
-            priv_signup_html = f"<div><h2>Private schedule</h2><a href=\"{r['sched_link']}\">{r['sched_link']}</a></div><div><strong>{conf('event.emailfooter')}</strong></div>"
-            priv_signup_plain = f"\nPrivate meeting signup: {r['sched_link']}\n{conf('event.emailfooter')}"
-            html = f"""
-            <strong>{event} - {datestr}</strong>
-            <h2>{r['title']}</h2>
-            <h3>{r['speaker']} - {r['affiliation']}</h3>
-            <div><p>Abstract: </p><p style=\"white-space:pre-wrap;\">{r['abstract']}</p></div>
-            <div><p>Bio:</p><p style=\"white-space:pre-wrap;\">{r['bio']}</p></div><div></div>
-            <div>
-            <p><strong>Location and Video Conference link</strong>: <a href=\"{public_url}\">{public_url}</a></p>
-            <p>Timezone: {conf('server.tzlong')}</p>
-            </div>"""
-            plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nLocation & Video Conference link: {public_url}\n\nTimezone: {conf('server.tzlong')}"
-            speaker_email = r['email']
-            host_email = r['host_email']
-            mailing_list_email = conf("email.mailing_list")
-            priv_mailing_list_email = conf("email.priv_mailing_list")
-            send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
-            send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email])
-            with conn() as c:
-                c.execute('UPDATE events SET announced=1 WHERE date=? AND warmup=?',
-                          (r['date'],r['warmup']))
+        for prev_announcements, days_in_advance in [(1, 1), (0, 6)]:
+            with conn(d=True) as c:
+                upcoming_talks = c.execute(f"SELECT * FROM events WHERE announced={prev_announcements} AND date>date('now','+{days_in_advance} day') AND date<date('now','+{days_in_advance+1} day')").fetchall()
+                all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
+            for r in upcoming_talks:
+                event = conf('event.name')
+                datestr = r['date'].strftime('%b %-d %-I:%M%p')
+                subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
+                priv_subject = f"Private Schedule - {r['title']} by {r['speaker']}"
+                public_url = 'https://'+conf('server.url')+'/event/'+str(r['date'])+'/'+str(r['warmup'])
+                upcoming_url = 'https://'+conf('server.url')
+                if all_upcoming_talks:
+                    _html = "".join([f"<p>{t['date']} | {t['title']} - {t['speaker']}</p>" for t in all_upcoming_talks if t!=r])
+                    _plain = "\n".join([f"{t['date']} | {t['title']} - {t['speaker']}" for t in all_upcoming_talks if t!=r])
+                    future_talks_html = f"<div><h2>Future talks (<a href=\"{upcoming_url}\">listed at {upcoming_url}</a>)</h2>{_html}</div>"
+                    future_talks_plain = f"\n\nFuture talks listed at {upcoming_url}\n{_plain}"
+                else:
+                    future_talks_html = f"<div><a href=\"{upcoming_url}\">{upcoming_url}</div>"
+                    future_talks_plain = f"\n\n{upcoming_url}"
+                priv_signup_html = f"<div><h2>Private schedule</h2><a href=\"{r['sched_link']}\">{r['sched_link']}</a></div><div><strong>{conf('event.emailfooter')}</strong></div>"
+                priv_signup_plain = f"\nPrivate meeting signup: {r['sched_link']}\n{conf('event.emailfooter')}"
+                html = f"""
+                <strong>{event} - {datestr}</strong>
+                <h2>{r['title']}</h2>
+                <h3>{r['speaker']} - {r['affiliation']}</h3>
+                <div><p>Abstract: </p><p style=\"white-space:pre-wrap;\">{r['abstract']}</p></div>
+                <div><p>Bio:</p><p style=\"white-space:pre-wrap;\">{r['bio']}</p></div><div></div>
+                <div>
+                <p><strong>Location and Video Conference link</strong>: <a href=\"{public_url}\">{public_url}</a></p>
+                <p>Timezone: {conf('server.tzlong')}</p>
+                </div>"""
+                plain = f"{event} - {datestr}\n{r['title']}\n{r['speaker']} - {r['affiliation']}\n\nAbstract: {r['abstract']}\n\nBio: {r['bio']}\n\nLocation & Video Conference link: {public_url}\n\nTimezone: {conf('server.tzlong')}"
+                speaker_email = r['email']
+                host_email = r['host_email']
+                mailing_list_email = conf("email.mailing_list")
+                priv_mailing_list_email = conf("email.priv_mailing_list")
+                send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
+                send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email])
+                with conn() as c:
+                    c.execute('UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
+                              (r['date'],r['warmup']))
     except Exception as e:
         log.error('Failure in the email annoucements scheduled job due to %s'%e)
 
