@@ -1,4 +1,4 @@
-#start with debian:10 (what the nonlocally server runs)
+#start with debian:10
 FROM debian:10
 
 # make a directory to work from
@@ -16,9 +16,10 @@ RUN rm -rf /var/lib/apt/lists/*
 
 # copy all files, including the requirements.txt file into the container and install the python packages listed on it via pip
 # 'pip install --upgrade pip' and 'pip install wheel' just ensure that the later installs run smoothly
-COPY ./ ./
+COPY ./requirements.txt ./requirements.txt
 RUN pip3 install --upgrade pip
 RUN pip3 install wheel
 RUN pip3 install -r requirements.txt
+COPY ./ ./
 
 ENTRYPOINT ["python3", "briefings_server.py"]
