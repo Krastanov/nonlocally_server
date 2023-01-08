@@ -112,7 +112,7 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         msg['Subject'] = subject
         msg['From'] = email.headerregistry.Address(conf('email.from_display'), conf('email.from_user'), conf('email.from'))
         msg['To'] = emailaddr
-        msg['Cc'] = ','.join(conf('email.cc')+cc+[conf('sysadmin.email')])
+        msg['Bcc'] = ','.join(conf('email.cc')+cc+[conf('sysadmin.email')])
 
         msg.add_alternative(html_content, subtype='html')
         for pngbytes, cid in pngbytes_cids:
