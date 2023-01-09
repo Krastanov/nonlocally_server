@@ -576,8 +576,8 @@ class Admin:
             with conn() as c:
                 c.execute('INSERT INTO invitations (uuid, email, dates, warmup, host, host_email, confirmed_date, location) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)',
                           (uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email, location))
-        except:
-            log.error('Could not insert '%((uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email),))
+        except Exception as e:
+            log.error('Could not insert %s due to %s'%((uid, email, '|'.join(repr(d) for d in dates), warmup, host, host_email),e))
             return templates.get_template('admin_blank.html').render(content='There was a problem with the database! Try again!')
         # Email
         text_content = subject = conf('invitations.email_subject_line')
