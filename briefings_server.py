@@ -197,7 +197,7 @@ def check_upcoming_talks_and_email():
                 send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
                 send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email])
                 with conn() as c:
-                    c.execute('UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
+                    c.execute(f'UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
                               (r['date'],r['warmup']))
     except Exception as e:
         log.error('Failure in the email annoucements scheduled job due to %s'%e)
