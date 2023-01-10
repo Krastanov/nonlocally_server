@@ -2,7 +2,7 @@
 <div class="panel panel-default" id="panel-{{date}}">
   <div class="panel-heading">
     <h3 id="time{{date}}">{{date}} | {{tz}}</h3>
-    <script>document.getElementById("time{{date}}").innerText = (new luxon.DateTime.fromSQL('{{date}}')).setZone('{{tz}}').toLocaleString({hour: "numeric", minute: "numeric", hourCycle: "h23", timeZoneName: "short", ...luxon.DateTime.DATE_MED});</script>
+    <script>document.getElementById("time{{date}}").innerText = (new luxon.DateTime.fromSQL('{{date}}')).setZone('{{tz}}',{keepLocalTime:true}).toLocal().toLocaleString({hour: "numeric", minute: "numeric", hourCycle: "h23", timeZoneName: "short", ...luxon.DateTime.DATE_MED});</script>
     <h2><a href="/event/{{date}}/{{warmup}}">{{speaker | e}}</a> <span class="badge badge-secondary">{{affiliation}}</span></h2>
   </div>
   <div class="panel-body">
