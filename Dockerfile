@@ -9,7 +9,7 @@ WORKDIR /workdir
 # currently its just 'python3', 'python3-pip', 'sqlite3', and 'ffmpeg'
 # if more programs are needed they should be added here
 RUN apt update
-RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends python3 python3-pip sqlite3 && apt clean
+RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends python3 python3-pip sqlite3 wget && apt clean
 RUN DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg libx264-155 libx265-165 && apt clean
 
 RUN rm -rf /var/lib/apt/lists/*

@@ -14,7 +14,7 @@
     this talk was not recorded
     {% endif %}
   {% endset %}
-  {{ event.event(date, tz, speaker, affiliation, title, abstract, bio, 0, recording_consent and recording_processed, footer) }}
+  {{ event.event(date, speaker, affiliation, title, abstract, bio, 0, recording_consent and recording_processed, footer) }}
 {% endfor %}
 {% else %}
 <p>No recorded past talks.</p>

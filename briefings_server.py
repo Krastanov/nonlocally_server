@@ -102,6 +102,7 @@ templates.globals['EVENT_NAME'] = conf('event.name')
 templates.globals['DESCRIPTION'] = conf('event.description')
 templates.globals['URL'] = conf('server.url')
 templates.globals['KEYWORDS'] = conf('event.keywords')
+templates.globals['TZ'] = conf('server.tzlong')
 
 
 def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[], cc=[]):
@@ -128,8 +129,8 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         server.login(username,password)
         server.send_message(msg)
         server.quit()
-    except:
-        log.error('failed to send email "%s" <%s>'%(subject, emailaddr))
+    except Exception as e:
+        log.error('failed to send email "%s" <%s> due to %s'%(subject, emailaddr, e))
 
 
 def ZOOM_TEMPLATE():
@@ -158,9 +159,9 @@ etherpad = py_etherpad.EtherpadLiteClient(apiKey=conf("etherpad.apikey"),baseUrl
 def check_upcoming_talks_and_email():
     try:
         log.debug('Checking whether we need to send an email announcement for talks')
-        for prev_announcements, days_in_advance in [(1, 1), (0, 6)]:
+        for prev_announcements, days_in_advance_min, days_in_advance_max in [(1, 0, 1), (0, 1, 6)]:
             with conn(d=True) as c:
-                upcoming_talks = c.execute(f"SELECT * FROM events WHERE announced={prev_announcements} AND date>date('now','+{days_in_advance} day') AND date<date('now','+{days_in_advance+1} day')").fetchall()
+                upcoming_talks = c.execute(f"SELECT * FROM events WHERE announced<={prev_announcements} AND date>date('now','+{days_in_advance_min} day') AND date<date('now','+{days_in_advance_max} day')").fetchall()
                 all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
             for r in upcoming_talks:
                 event = conf('event.name')
@@ -196,7 +197,7 @@ def check_upcoming_talks_and_email():
                 priv_mailing_list_email = conf("email.priv_mailing_list")
                 send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
                 send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email])
-                with conn() as c:
+                with conn() as c: # TODO do not send this if the email failed to send
                     c.execute(f'UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
                               (r['date'],r['warmup']))
     except Exception as e:
@@ -206,7 +207,7 @@ def check_recordings_and_download():
     try:
         log.debug('Checking whether we have talks to download recordings for')
         with conn(d=True) as c:
-            recorded_talks = c.execute("SELECT * FROM events WHERE recording_processed=0 AND recording_consent=1 AND date<date('now','-1 day')").fetchall()
+            recorded_talks = c.execute("SELECT * FROM events WHERE recording_processed=0 AND recording_consent=1 AND date<date('now','-1 day') ORDER BY date DESC").fetchall()
         for r in recorded_talks: # TODO this should be a function that can also be called from the admin panel
             event = conf('event.name')
             config = {"recording_authentication": False}
@@ -214,23 +215,26 @@ def check_recordings_and_download():
                 meetingid = r['conf_link'].split('/')[-1]
             else:
                 log.error("the conf_link for %s is missing and we can not download anything"%r['date'])
+            log.debug(f"looking up zoom recording for {r['date']} {r['warmup']}")
             Zoom.patch('/meetings/%s/recordings/settings'%meetingid, data=config)
             rec = Zoom.get('/meetings/%s/recordings'%meetingid).json()
             log.debug("zoom recording json: %s"%(json.dumps(rec,indent=4)))
-            rec = [r for r in rec['recording_files'] if r['recording_type']=='shared_screen_with_speaker_view']
-            rec = rec[0] # TODO something smarter than just downloading the first file you found
+            rec = [r for r in rec['recording_files'] if r['recording_type'].startswith('shared_screen')]
+            rec.sort(key=lambda _:int(_['file_size']),reverse=True)
+            rec = rec[0]
             url = rec['download_url']
             recording_folder = FOLDER_LOCATION+"/recordings/"+SEMINAR_SERIES # TODO this should be in config and the trailing / should be normalized conf("zoom.recdownloads")
             recording_name = str(r["date"]).replace(" ","_").replace(":","_") + '-' + str(int(r["warmup"]))
             hls_cmd = f"ffmpeg -i {recording_folder}/{recording_name}.mp4 -profile:v baseline -level 3.0 -start_number 0 -hls_time 10 -hls_list_size 0 -f hls {recording_folder}/hls/{recording_name}.m3u8"
-            log.debug("started downloading %s"%recording_name)
-            os.system('wget "%s" -O "%s/%s.mp4"'%(url,recording_folder,recording_name))
+            log.debug("started downloading %s into %s/%s"%(url,recording_folder,recording_name))
+            os.system('wget "%s" -O "%s/%s.mp4"'%(url,recording_folder,recording_name)) # TODO raise error if wget is not installed
             log.debug("finished downloading and now converting %s"%recording_name)
-            os.system(f'{hls_cmd} &')
+            os.system(f'{hls_cmd} &') # TODO raise error if ffmpeg is not installed
             log.debug("converting is now running in the background %s"%recording_name)
             with conn() as c:
                 c.execute('UPDATE events SET recording_processed=1 WHERE date=? AND warmup=?',
                           (r['date'],r['warmup']))
+            break # TODO add some delay so we do not download multiple files at the same time and remove this break statement
     except Exception as e:
         log.error('Failure in downloading recording due to %s'%e)
 
@@ -248,7 +252,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
         now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
-        return templates.get_template('__index.html').render(records=records, banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'), tz=conf('server.tzlong'))
+        return templates.get_template('__index.html').render(records=records, banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'))
 
     @cherrypy.expose
     def iframeupcoming(self):
@@ -256,7 +260,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
         now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
-        return templates.get_template('__iframeupcoming.html').render(records=records, tz=conf('server.tzlong'))
+        return templates.get_template('__iframeupcoming.html').render(records=records)
 
     @cherrypy.expose
     def past(self):
@@ -264,7 +268,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location, recording_processed FROM events WHERE warmup=0 ORDER BY date DESC'))
         now = datetime.datetime.now()
         records = [t for t in all_talks if t[0]<now]
-        return templates.get_template('__past.html').render(records=records, tz=conf('server.tzlong'))
+        return templates.get_template('__past.html').render(records=records)
 
     @cherrypy.expose
     def event(self, date, warmup):
@@ -278,7 +282,7 @@ class Root:
         except:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
-        return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup, tz=conf('server.tzlong'))
+        return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup)
 
     @cherrypy.expose
     def about(self):
@@ -389,7 +393,7 @@ class Invite:
         else:
             old_data = dict()
             preevent_message = ''
-        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location, preevent_message=preevent_message, tz=conf('server.tzlong'))
+        return templates.get_template('invite_index.html').render(dates=good_dates, confirmed_date=confirmed_date, email=email, uuid=uuid, warmup=warmup, old_data=old_data, host=host, host_email=host_email, invite_location=invite_location, preevent_message=preevent_message)
 
     @staticmethod
     def preevent_message(uuid,confirmed_date,warmup,data,host):
@@ -489,7 +493,7 @@ class Invite:
                     details_url=public_url,
                     speaker=html.escape(data_dict['speaker']),
                     affiliation=html.escape(data_dict['affiliation']),
-                    date=html.escape(str(data_dict['date']))+f"  conf('server.tzlong')",
+                    date=html.escape(str(data_dict['date']))+f"  {conf('server.tzlong')}",
                     )
             sched_url = conf('etherpad.url')+'/p/'+padid 
             etherpad.setHtml(padid, schedhtml)
@@ -891,7 +895,8 @@ if __name__ == '__main__':
     cherrypy.tree.mount(Dev(), '/dev', sys_password_conf)
     cherrypy.tree.mount(Zoom(), '/zoom', {})
     for (f,t) in scheduled_events:
-        Monitor(cherrypy.engine, f, frequency=t).subscribe()
+        threading.Thread(target=f).start() # run it once at the start
+        Monitor(cherrypy.engine, f, frequency=t).subscribe() # schedule future runs
     cherrypy.engine.start()
     cherrypy.engine.block()
     log.info('server stoped')
