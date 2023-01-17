@@ -523,7 +523,7 @@ class Admin:
 
     @cherrypy.expose
     def index(self):
-        return templates.get_template('admin_sop.html')
+        return templates.get_template('admin_sop.html').render()
 
     @staticmethod
     def get_configrecords(access_levels=[]):
