@@ -3,5 +3,5 @@ jinja2
 python-dateutil
 pyetherpadlite
 rauth
-google_auth_oauthlib
-google-api-python-client
+ics
+pytz

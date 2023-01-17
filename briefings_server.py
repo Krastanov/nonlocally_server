@@ -139,7 +139,7 @@ def ZOOM_TEMPLATE():
     "type": 2,
     #"start_time": "",
     "duration": 240,
-    "timezone": 'America/New_York',
+    "timezone": conf('server.tzlong'),
     "settings": {
       "alternative_hosts": ';'.join(conf('zoom.alternative_hosts')),
       "host_video": False,
