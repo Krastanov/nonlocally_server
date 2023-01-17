@@ -159,7 +159,7 @@ etherpad = py_etherpad.EtherpadLiteClient(apiKey=conf("etherpad.apikey"),baseUrl
 def check_upcoming_talks_and_email():
     try:
         log.debug('Checking whether we need to send an email announcement for talks')
-        for prev_announcements, days_in_advance_min, days_in_advance_max in [(1, 0, 1), (0, 1, 6)]:
+        for prev_announcements, days_in_advance_min, days_in_advance_max in [(1, 1, 2), (0, 1, 6)]:
             with conn(d=True) as c:
                 upcoming_talks = c.execute(f"SELECT * FROM events WHERE announced<={prev_announcements} AND date>date('now','+{days_in_advance_min} day') AND date<date('now','+{days_in_advance_max} day')").fetchall()
                 all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
@@ -252,7 +252,7 @@ class Root:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, conf_link, location FROM events WHERE warmup=0 ORDER BY date ASC'))
         now = datetime.datetime.now() - datetime.timedelta(days=2)
         records = [t for t in all_talks if t[0]>now]
-        return templates.get_template('__index.html').render(records=records, banner=conf('frontpage.banner'), customfooter=conf('frontpage.footer'))
+        return templates.get_template('__index.html').render(records=records, customfooter=conf('frontpage.footer'))
 
     @cherrypy.expose
     def iframeupcoming(self):
@@ -467,13 +467,16 @@ class Invite:
                             'topic': conf('event.name')+": "+data_dict['speaker'],
                             **ZOOM_TEMPLATE()}
         try:
-            url = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()['join_url']
+            log.info(f"Attempting the creation of a zoom room for {data_dict['date']}")
+            response = Zoom.post('/users/me/meetings', data=zoom_meet_config).json()
+            log.info(f"Zoom responds with {response}")
+            url = response['join_url']
             data_dict['conf_link'] = url
             with conn() as c:
                 c = c.cursor()
                 c.execute('UPDATE events SET conf_link=? WHERE date=? AND warmup=?', (url, data_dict['date'], data_dict['warmup']))
-        except:
-            log.error('Could not create a Zoom room for %s %s'%(data_dict['date'], data_dict['warmup']))
+        except Exception as e:
+            log.error(f'Could not create a Zoom room for {data_dict["date"]} {data_dict["warmup"]} due to {e}')
             data_dict['conf_link'] = ''
 
     @staticmethod
@@ -860,7 +863,7 @@ if __name__ == '__main__':
     customfiles_conf = {'/customfiles':{# Almost certainly this should be overwritten by your reverse proxy config.
                               'tools.staticdir.on'   : True,
                               'tools.staticdir.dir'  : '',
-                              'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),'customfiles/'+SEMINAR_SERIES),
+                              'tools.staticdir.root' : os.path.join(os.path.dirname(os.path.realpath(__file__)),FOLDER_LOCATION+'/customfiles'),
                               'tools.auth_basic.on': False
                              }}
     video_conf = {'/video':{# Almost certainly this should be overwritten by your reverse proxy config.
