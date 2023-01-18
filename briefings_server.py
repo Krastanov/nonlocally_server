@@ -31,6 +31,8 @@ import dateutil.parser
 import py_etherpad
 import rauth
 import requests
+import ics
+import pytz
 
 
 # TODO unify admin_judge, apply_index, and invite_index / unify the invitations and applications tables
@@ -105,7 +107,7 @@ templates.globals['KEYWORDS'] = conf('event.keywords')
 templates.globals['TZ'] = conf('server.tzlong')
 
 
-def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], file_atts=[], cc=[]):
+def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[], text_file_att=[], cc=[]):
     log.debug('attempting to send email "%s" <%s>'%(subject, emailaddr))
     try:
         msg = email.message.EmailMessage()
@@ -118,8 +120,8 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         msg.add_alternative(html_content, subtype='html')
         for pngbytes, cid in pngbytes_cids:
             msg.get_payload()[1].add_related(pngbytes, 'image', 'png', cid=cid)
-        for att in file_atts:
-            msg.attach(att)
+        for fname, ftext, subtype in text_file_att:
+            msg.add_attachment(ftext.encode('utf8'), 'text', subtype, filename=fname)
         
         username = conf('email.SMTPuser')
         password = conf('email.SMTPpass')
@@ -168,7 +170,7 @@ def check_upcoming_talks_and_email():
                 datestr = r['date'].strftime('%b %-d %-I:%M%p')
                 subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
                 priv_subject = f"Private Schedule - {r['title']} by {r['speaker']}"
-                public_url = 'https://'+conf('server.url')+'/event/'+str(r['date'])+'/'+str(r['warmup'])
+                public_url = 'https://'+conf('server.url')+'/event/'+urllib.parse.quote(str(r['date']))+'/'+str(r['warmup'])
                 upcoming_url = 'https://'+conf('server.url')
                 if all_upcoming_talks:
                     _html = "".join([f"<p>{t['date']} | {t['title']} - {t['speaker']}</p>" for t in all_upcoming_talks if t!=r])
@@ -195,13 +197,22 @@ def check_upcoming_talks_and_email():
                 host_email = r['host_email']
                 mailing_list_email = conf("email.mailing_list")
                 priv_mailing_list_email = conf("email.priv_mailing_list")
-                send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email])
-                send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email])
+                event_name = f"{r['title']} by {r['speaker']}"
+                ics_file = make_ics_file(subject, plain, r['date'], public_url)
+                send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email], text_file_att=[('calendar.ics',ics_file,'calendar')])
+                send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email], text_file_att=[('calendar.ics',ics_file,'calendar')])
                 with conn() as c: # TODO do not send this if the email failed to send
                     c.execute(f'UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
                               (r['date'],r['warmup']))
     except Exception as e:
         log.error('Failure in the email annoucements scheduled job due to %s'%e)
+
+def make_ics_file(name, description, begin, url):
+    c = ics.Calendar(creator="nonlocally")
+    begin = pytz.timezone(conf('server.tzlong')).localize(begin)
+    e = ics.Event(name=name,description=description,begin=begin,end=begin+datetime.timedelta(hours=1),location=url,url=url,uid=str(uuid.uuid3(uuid.NAMESPACE_URL,url)))
+    c.events.add(e)
+    return c.serialize()
 
 def check_recordings_and_download():
     try:
