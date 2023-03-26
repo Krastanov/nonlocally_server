@@ -167,7 +167,7 @@ def check_upcoming_talks_and_email():
                 all_upcoming_talks = list(c.execute("SELECT * FROM events WHERE announced=0 AND date>date('now') AND date<date('now','+60 day')"))
             for r in upcoming_talks:
                 event = conf('event.name')
-                datestr = r['date'].strftime('%b %-d %-I:%M%p')
+                datestr = r['date'].strftime('%b %-d')
                 subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
                 priv_subject = f"Private Schedule - {r['title']} by {r['speaker']}"
                 public_url = 'https://'+conf('server.url')+'/event/'+urllib.parse.quote(str(r['date']))+'/'+str(r['warmup'])
@@ -235,10 +235,14 @@ def check_recordings_and_download():
             rec = rec[0]
             url = rec['download_url']
             recording_folder = FOLDER_LOCATION+"/recordings/"+SEMINAR_SERIES # TODO this should be in config and the trailing / should be normalized conf("zoom.recdownloads")
+            os.system("mkdir -p %s"%recording_folder)
+            os.system("mkdir -p %s/hls"%recording_folder)
             recording_name = str(r["date"]).replace(" ","_").replace(":","_") + '-' + str(int(r["warmup"]))
             hls_cmd = f"ffmpeg -i {recording_folder}/{recording_name}.mp4 -profile:v baseline -level 3.0 -start_number 0 -hls_time 10 -hls_list_size 0 -f hls {recording_folder}/hls/{recording_name}.m3u8"
             log.debug("started downloading %s into %s/%s"%(url,recording_folder,recording_name))
-            os.system('wget "%s" -O "%s/%s.mp4"'%(url,recording_folder,recording_name)) # TODO raise error if wget is not installed
+            wget_cmd = 'wget "%s?access_token=%s" -O "%s/%s.mp4"'%(url,conf('zoom.accesstoken'),recording_folder,recording_name)
+            log.debug("downloading with %s"%wget_cmd)
+            os.system(wget_cmd) # TODO raise error if wget is not installed
             log.debug("finished downloading and now converting %s"%recording_name)
             os.system(f'{hls_cmd} &') # TODO raise error if ffmpeg is not installed
             log.debug("converting is now running in the background %s"%recording_name)
