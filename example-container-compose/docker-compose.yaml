@@ -1,0 +1,20 @@
+services:
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - "/data/podman/caddy/data/:/data/"
+      - "/data/podman/caddy/config/:/config/"
+      - "/data/podman/caddy/Caddyfile:/etc/caddy/Caddyfile"
+      - "/data/podman/nonlocally/oqe/var/recordings/:/nonlocally/oqevar/recordings"
+
+  nonlocally_oqe:
+    build:
+      context: nonlocally/server
+      containerfile: Dockerfile
+    command: "oqe var"
+    volumes:
+      - "/data/podman/nonlocally/oqe/var/:/workdir/var/"

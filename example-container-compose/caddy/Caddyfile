@@ -1,0 +1,11 @@
+{
+	#debug
+}
+
+oqe.nonlocally.org {
+	reverse_proxy nonlocally_oqe:12347
+	handle_path /video* {
+		root * /nonlocally/oqevar/recordings/oqe
+		file_server browse
+	}
+}
