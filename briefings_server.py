@@ -34,6 +34,8 @@ import requests
 import ics
 import pytz
 
+from .twitter import Twitter
+
 
 # TODO unify admin_judge, apply_index, and invite_index / unify the invitations and applications tables
 
@@ -134,6 +136,32 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
     except Exception as e:
         log.error('failed to send email "%s" <%s> due to %s'%(subject, emailaddr, e))
 
+def send_tweet(text_content, pngbytes=None):
+    twitterkeys = dict()
+    try:
+        twitterkeys["consumer_key"] = conf("twitter_consumer_key")
+        twitterkeys["consumer_secret"] = conf("twitter_consumer_secret")
+        twitterkeys["access_token"] = conf("twitter_access_token")
+        twitterkeys["access_secret"] = conf("twitter_access_secret")
+    except:
+        pass
+    def save_to_updateconf(keys):
+        for key in keys:
+            updateconf(key, keys[key])
+    try:
+        twitter = Twitter(twitterkeys, save_to_updateconf)
+
+        media_id = None
+        if pngbytes:
+            media_id = twitter.upload_media(pngbytes)
+
+        response = twitter.tweet(text_content, media_id):
+        if not response[0]:
+            log.error(f"Tweet failed with response {response[1]}")
+    except Exception as e:
+        log.error(f"Tweet failed with error {e}")
+
+
 
 def ZOOM_TEMPLATE():
     return {
@@ -201,6 +229,12 @@ def check_upcoming_talks_and_email():
                 ics_file = make_ics_file(subject, plain, r['date'], public_url)
                 send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email], text_file_att=[('calendar.ics',ics_file,'calendar')])
                 send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email], text_file_att=[('calendar.ics',ics_file,'calendar')])
+
+
+                # Send a Tweet
+                tweettext = subject + "\n\n" + public_url
+                send_tweet(tweettext)
+
                 with conn() as c: # TODO do not send this if the email failed to send
                     c.execute(f'UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
                               (r['date'],r['warmup']))
