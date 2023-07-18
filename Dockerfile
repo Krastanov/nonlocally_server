@@ -1,3 +1,10 @@
+###############################################################################################
+# INSTRUCTIONS:                                                                               #
+# 1. cd to the root directory of the git repo (.../nonlocally_server/) if you haven't already #
+# 2. docker build -t nonlocally .                                                             #
+# 3. docker run --net host -it -v $(pwd):/workdir nonlocally                                  #
+###############################################################################################
+
 #start with debian:10
 FROM debian
 
