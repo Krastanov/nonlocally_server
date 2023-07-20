@@ -2,6 +2,9 @@ from requests_oauthlib import OAuth1Session
 import json
 
 def twitter_login():
+    # Run this one-liner to populare the value "None" for the vakues of the twitter things in the ndatabase
+    # echo 'INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.consumer_key","Run python3 twitter.py for help with the login process.");INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.consumer_secret","Run python3 twitter.py for help with the login process.");INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.access_token","Run python3 twitter.py for help with the login process.");INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.access_secret","Run python3 twitter.py for help with the login process.");' | sqlite3 oqe_config.sqlite
+
     print("Go here: https://developer.twitter.com/en/portal/projects-and-apps and click on the key that says \"keys and tokens\", and get the consumer key and secret.")
     consumer_key = input("Paste the Consumer Key here: ")
     consumer_secret = input("Paste the Consumer Secret here: ")
