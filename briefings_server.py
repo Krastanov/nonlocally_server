@@ -34,7 +34,7 @@ import requests
 import ics
 import pytz
 
-from .twitter import Twitter
+from twitter import Twitter
 
 
 # TODO unify admin_judge, apply_index, and invite_index / unify the invitations and applications tables
@@ -42,7 +42,7 @@ from .twitter import Twitter
 file_dir = os.path.dirname(os.path.realpath(__file__))
 
 if len(sys.argv)!=3:
-    println("call as `python server.py SEMINAR_SERIES FOLDER_LOCATION`")
+    print("call as `python server.py SEMINAR_SERIES FOLDER_LOCATION`")
     raise Exception('You need to specify the seminar series and folder location')
 SEMINAR_SERIES = sys.argv[1]
 FOLDER_LOCATION = sys.argv[2]
@@ -51,6 +51,7 @@ CONF_FILENAME = FOLDER_LOCATION+ '/%s_config.sqlite' % SEMINAR_SERIES
 LOG_FILENAME = FOLDER_LOCATION+ '/%s.log' % SEMINAR_SERIES
 
 if not os.path.exists(os.path.join(file_dir,DB_FILENAME)):
+    print(f"Couldn't find the database at {os.path.join(file_dir, DB_FILENAME)}")
     raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
 if not os.path.exists(os.path.join(file_dir,CONF_FILENAME)):
     raise Exception('You need a configuration settings database file (maybe copy one of the already available and then edit it from the /admin page).')
@@ -98,6 +99,12 @@ def updateconf(k,v):
         c = conn.cursor()
         c.execute('UPDATE config SET value=? WHERE key=?',(v,k))
 
+def insertconf(k, v, valuetype='str'):
+    conn = sqlite3.connect(os.path.join(file_dir,CONF_FILENAME))
+    with conn:
+        c = conn.cursor()
+        c.execute('INSERT INTO config (value, valuetype, key) VALUES (?,?,?)',(v,valuetype,k))
+
 def parsedates(dates): # TODO this should be automatically done as a registered converter
     return [eval(d) for d in dates.split('|')] # TODO better parsing... actually better storing of array of dates too
 
@@ -137,30 +144,30 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         log.error('failed to send email "%s" <%s> due to %s'%(subject, emailaddr, e))
 
 def send_tweet(text_content, pngbytes=None):
-    twitterkeys = dict()
     try:
-        twitterkeys["consumer_key"] = conf("twitter_consumer_key")
-        twitterkeys["consumer_secret"] = conf("twitter_consumer_secret")
-        twitterkeys["access_token"] = conf("twitter_access_token")
-        twitterkeys["access_secret"] = conf("twitter_access_secret")
-    except:
-        pass
-    def save_to_updateconf(keys):
-        for key in keys:
-            updateconf(key, keys[key])
-    try:
-        twitter = Twitter(twitterkeys, save_to_updateconf)
+        twitterkeys = dict()
+        for key in [
+                "consumer_key",
+                "consumer_secret",
+                "access_token",
+                "access_secret"]:
+            v = conf("twitter." + key)
+            if v == "None" or v is None:
+            # if the keys are incomplete, just silently abort the tweet attempt
+                return
+            twitterkeys[key] = conf("twitter." + key)
+
+        twitter = Twitter(twitterkeys)
 
         media_id = None
         if pngbytes:
-            media_id = twitter.upload_media(pngbytes)
+            media_id = twitter.upload_media(pngbytes, log=log)
+            if media_id is None:
+                return
 
-        response = twitter.tweet(text_content, media_id):
-        if not response[0]:
-            log.error(f"Tweet failed with response {response[1]}")
+        twitter.tweet(text_content, media_id, log=log)
     except Exception as e:
-        log.error(f"Tweet failed with error {e}")
-
+        log.error(f"sending tweet failed due to exception {e}")
 
 
 def ZOOM_TEMPLATE():
@@ -232,7 +239,7 @@ def check_upcoming_talks_and_email():
 
 
                 # Send a Tweet
-                tweettext = subject + "\n\n" + public_url
+                tweettext = f'Glad to host {r["speaker"]} of {r["affiliation"]} for an OQE seminar, titled "{r["title"]}".\n\n{public_url}\n\nThe recorded talk will be available.'
                 send_tweet(tweettext)
 
                 with conn() as c: # TODO do not send this if the email failed to send
@@ -894,6 +901,7 @@ def allauth(realm,u,p):
 
 if __name__ == '__main__':
     log.info('server starting')
+    log.info(f'using port {conf("server.port")}')
     cherrypy.config.update({'server.socket_host'     : '0.0.0.0',
                             'server.socket_port'     : conf('server.port'),
                             'tools.encode.on'        : True,
