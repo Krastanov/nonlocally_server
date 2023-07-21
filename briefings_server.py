@@ -162,7 +162,7 @@ def send_tweet(text_content, pngbytes=None):
         media_id = None
         if pngbytes:
             media_id = twitter.upload_media(pngbytes, log=log)
-            if media_id is None:
+            if media_id is None: # abort tweeting if media upload fails rather than tweet without media (error logs will happen in the upload_media function so logging here would be redundant)
                 return
 
         twitter.tweet(text_content, media_id, log=log)
