@@ -17,7 +17,7 @@ WORKDIR /workdir
 # if more programs are needed they should be added here
 RUN apt update
 RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends python3 python3-venv sqlite3 wget && apt clean
-RUN DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg && apt clean
+RUN DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg libx264-dev libx265-dev && apt clean
 
 RUN rm -rf /var/lib/apt/lists/*
 
