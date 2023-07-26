@@ -1,0 +1,16 @@
+{% extends "baseadmin.html" %}
+{% block row %}
+{% if queries|length > 0 %}
+<form action="/admin/authtwitter" method="GET">
+    {% for query in queries %}
+    {% if 'instruction' in query %}
+    <label for="instruction">{{ query['instruction']|safe }}</label><br>
+    {% endif %}
+    <label for="{{ query['id'] }}">{{ query['label'] }}</label>
+    <input type="text" id="{{ query['id'] }}" name="{{ query['id'] }}">
+    <br>
+    {% endfor %}
+    <input type="submit" value="Submit">
+</form>
+{% endif %}
+{% endblock %}

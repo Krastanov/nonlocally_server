@@ -1,6 +1,17 @@
 from requests_oauthlib import OAuth1Session
 import json
 
+# HOW TO SET UP TWITTER:
+# option 1 (web UI):
+#     go to /admin/authtwitter and follow the instructions
+#
+# option 2 (manually / programatically):
+#     1. Run the one liner mentioned in twitter_login()
+#     2. Run twitter_login() and follow the instructions
+#     3. Save the output from twitter_login(), either via the web ui configuration page or programatically
+
+
+
 def twitter_login():
     # Run this one-liner to populare the value "None" for the values of the twitter things in the database
     # echo 'INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.consumer_key","Run python3 twitter.py for help with the login process.");INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.consumer_secret","Run python3 twitter.py for help with the login process.");INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.access_token","Run python3 twitter.py for help with the login process.");INSERT INTO config (value, valuetype, key, help) VALUES ("None","str","twitter.access_secret","Run python3 twitter.py for help with the login process.");' | sqlite3 oqe_config.sqlite
@@ -57,19 +68,73 @@ def twitter_login():
 
 
 class Twitter:
+    keytypes = ["consumer_key", "consumer_secret", "access_token", "access_secret", "resource_owner_key", "resource_owner_secret"]
+
     def __init__(self, keys):
         # Inputs:
         # keys: a dictionary with entries for the needed keys/secrets
-        try:
-            self.consumer_key = keys["consumer_key"]
-            self.consumer_secret = keys["consumer_secret"]
-            self.access_token = keys["access_token"]
-            self.access_secret = keys["access_secret"]
-        except:
-            self.consumer_key = None
-            self.consumer_secret = None
-            self.access_token = None
-            self.access_secret = None
+        for keytype in Twitter.keytypes:
+            try:
+                if keys[keytype].lower() in ['',"none","nil","null"]:
+                    setattr(self, keytype, None)
+                else:
+                    setattr(self, keytype, keys[keytype])
+            except:
+                setattr(self, keytype, None)
+
+    def login(self, extradata=None):
+        # checks the current login status and requests more data if necessary
+
+        if extradata is None:
+            extradata = dict()
+        # If the consumer_key or consumer_secret is missing, we must send the user to the twitter page to 
+        if self.consumer_key is None or self.consumer_secret is None:
+            queries = [
+                    {"id" : "consumer_key", "instruction" : '<a href="https://developer.twitter.com/en/portal/projects-and-apps" target="_blank" rel="noopener noreferrer">Click here</a> and click on the key that says "access and tokens", and get the consumer key and secret.', "label" : "Consumer Key: "},
+                    {"id" : "consumer_secret", "label" : "Consumer Secret: "}
+                    ]
+            return queries
+
+        if self.access_token is None or self.access_secret is None:
+            if "verifier_number" not in extradata or self.resource_owner_key is None or self.resource_owner_secret is None:
+                request_token_url = "https://api.twitter.com/oauth/request_token?oauth_callback=oob&x_auth_access_type=write"
+                oauth = OAuth1Session(self.consumer_key, client_secret=self.consumer_secret)
+                fetch_response = oauth.fetch_request_token(request_token_url)
+                resource_owner_key = fetch_response.get("oauth_token")
+                resource_owner_secret = fetch_response.get("oauth_token_secret")
+
+                base_authorization_url = "https://api.twitter.com/oauth/authorize"
+
+                queries = [
+                        {"save_key" : "resource_owner_key", "save_value" : resource_owner_key},
+                        {"save_key" : "resource_owner_secret", "save_value" : resource_owner_secret},
+                        {"id" : "verifier_number", "label" : "Authorization PIN: ", "instruction" : f'<a href="{oauth.authorization_url(base_authorization_url)}" target="_blank" rel="noopener noreferrer">Click here</a> to get your authorization pin.'}
+                        ]
+                return queries
+            else:
+                access_token_url = "https://api.twitter.com/oauth/access_token"
+                oauth = OAuth1Session(
+                    self.consumer_key,
+                    client_secret=self.consumer_secret,
+                    resource_owner_key=self.resource_owner_key,
+                    resource_owner_secret=self.resource_owner_secret,
+                    verifier=extradata["verifier_number"],
+                )
+                oauth_tokens = oauth.fetch_access_token(access_token_url)
+
+                self.access_token = oauth_tokens["oauth_token"]
+                self.access_secret = oauth_tokens["oauth_token_secret"]
+
+                queries = [
+                        {"save_key" : "access_token", "save_value" : self.access_token},
+                        {"save_key" : "access_secret", "save_value" : self.access_secret}
+                        ]
+                return queries
+        else:
+            return []
+
+                
+        
        
 
     def upload_image(self, image_bytes,image_type="png", log=None):
