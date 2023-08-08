@@ -34,13 +34,14 @@ import requests
 import ics
 import pytz
 
+from twitter import Twitter
 
 # TODO unify admin_judge, apply_index, and invite_index / unify the invitations and applications tables
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
 
 if len(sys.argv)!=3:
-    println("call as `python server.py SEMINAR_SERIES FOLDER_LOCATION`")
+    print("call as `python server.py SEMINAR_SERIES FOLDER_LOCATION`")
     raise Exception('You need to specify the seminar series and folder location')
 SEMINAR_SERIES = sys.argv[1]
 FOLDER_LOCATION = sys.argv[2]
@@ -49,6 +50,7 @@ CONF_FILENAME = FOLDER_LOCATION+ '/%s_config.sqlite' % SEMINAR_SERIES
 LOG_FILENAME = FOLDER_LOCATION+ '/%s.log' % SEMINAR_SERIES
 
 if not os.path.exists(os.path.join(file_dir,DB_FILENAME)):
+    print(f"Couldn't find the database at {os.path.join(file_dir, DB_FILENAME)}")
     raise Exception('Please run `create_db.sh` in order to create an empty sqlite database.')
 if not os.path.exists(os.path.join(file_dir,CONF_FILENAME)):
     raise Exception('You need a configuration settings database file (maybe copy one of the already available and then edit it from the /admin page).')
@@ -96,6 +98,12 @@ def updateconf(k,v):
         c = conn.cursor()
         c.execute('UPDATE config SET value=? WHERE key=?',(v,k))
 
+def insertconf(k, v, helpstr='', valuetype='str'):
+    conn = sqlite3.connect(os.path.join(file_dir,CONF_FILENAME))
+    with conn:
+        c = conn.cursor()
+        c.execute('INSERT INTO config (value, valuetype, key, help) VALUES (?,?,?,?)',(v,valuetype,k,helpstr))
+
 def parsedates(dates): # TODO this should be automatically done as a registered converter
     return [eval(d) for d in dates.split('|')] # TODO better parsing... actually better storing of array of dates too
 
@@ -133,6 +141,32 @@ def send_email(text_content, html_content, emailaddr, subject, pngbytes_cids=[],
         server.quit()
     except Exception as e:
         log.error('failed to send email "%s" <%s> due to %s'%(subject, emailaddr, e))
+
+def send_tweet(text_content, pngbytes=None):
+    try:
+        twitterkeys = dict()
+        for key in [
+                "consumer_key",
+                "consumer_secret",
+                "access_token",
+                "access_secret"]:
+            v = conf("twitter." + key)
+            if v == "None" or v is None or v == "":
+            # if the keys are incomplete, just silently abort the tweet attempt
+                return
+            twitterkeys[key] = conf("twitter." + key)
+
+        twitter = Twitter(twitterkeys)
+
+        media_id = None
+        if pngbytes:
+            media_id = twitter.upload_media(pngbytes, log=log)
+            if media_id is None: # abort tweeting if media upload fails rather than tweet without media (error logs will happen in the upload_media function so logging here would be redundant)
+                return
+
+        twitter.tweet(text_content, media_id, log=log)
+    except Exception as e:
+        log.error(f"sending tweet failed due to exception {e}")
 
 
 def ZOOM_TEMPLATE():
@@ -201,6 +235,12 @@ def check_upcoming_talks_and_email():
                 ics_file = make_ics_file(subject, plain, r['date'], public_url)
                 send_email(plain+future_talks_plain, html+future_talks_html, mailing_list_email, subject, cc=[speaker_email, host_email], text_file_att=[('calendar.ics',ics_file,'calendar')])
                 send_email(plain+priv_signup_plain+future_talks_plain, html+priv_signup_html+future_talks_html, priv_mailing_list_email, priv_subject, cc=[speaker_email, host_email], text_file_att=[('calendar.ics',ics_file,'calendar')])
+
+
+                # Send a Tweet
+                tweettext = f'Glad to host {r["speaker"]} of {r["affiliation"]} for an OQE seminar, titled "{r["title"]}".\n\n{public_url}'
+                send_tweet(tweettext)
+
                 with conn() as c: # TODO do not send this if the email failed to send
                     c.execute(f'UPDATE events SET announced={prev_announcements+1} WHERE date=? AND warmup=?',
                               (r['date'],r['warmup']))
@@ -747,6 +787,103 @@ class Admin:
         Zoom.start_auth()
 
     @cherrypy.expose
+    def authtwitter(self,**formdata):
+        # This function will:
+        # 1. parse any html form input and reject it if its not alphanumeric (unless its for the "tweet" key)
+        # 2. save any form input that matches a relevant twitter key to the database
+        # 3. create a Twitter object and ask what it needs for the next step in the login process
+        # 4. renders an html form based on the output of the Twitter login call
+        # 5. in some cases, save data to the database as specified from the Twitter login call
+        # 6. If the state of twitter login is good, allows manual sending of test tweets via html form
+
+        for key in formdata:
+            # if we received input data that was nonalphanumeric, don't do anything with it in case its dangerous (to prevent something like this from happening: https://xkcd.com/327/ )
+            if key == "tweet":
+                continue # we give "tweet" a pass to allow spaces in test tweets.  Also because a bad tweet string becomes twitter's problem, and otherwise should be handled safely by our code.
+            if not formdata[key].isalnum():
+                errorstring = 'Invalid input.  <a href="/admin/authtwitter">Click here to try again.</a>'
+                return templates.get_template('admin_blank.html').render(content=errorstring)
+
+        for key in Twitter.keytypes:
+            if key in formdata:
+                # first step is to try to use updateconf
+                matched = False
+                try:
+                    matched = conf("twitter." + key) == formdata[key]
+                except:
+                    matched = False
+                if not matched:
+                    try:
+                        updateconf("twitter." + key, formdata[key])
+                    except:
+                        pass
+                # if that didn't work, try to use insertconf to add a new key
+                try:
+                    matched = conf("twitter." + key) == formdata[key]
+                except:
+                    matched = False
+                if not matched:
+                    try:
+                        insertconf("twitter." + key, formdata[key], helpstr='<a href="/admin/authtwitter">Click here to go through the twitter authorization process.</a>')
+                    except:
+                        pass
+
+        twitterkeys = dict()
+        for key in Twitter.keytypes:
+            try:
+                twitterkeys[key] = conf("twitter." + key)
+            except:
+                pass
+
+        twitter = Twitter(twitterkeys)
+        try:
+            queries = twitter.login(extradata=formdata)
+            disp_queries = []
+            for query in queries:
+                if "save_key" in query:
+                    key = query["save_key"]
+                    value = query["save_value"]
+                    matched = False
+                    try:
+                        matched = conf("twitter." + key) == value
+                    except:
+                        matched = False
+                    if not matched:
+                        try:
+                            updateconf("twitter." + key, value)
+                        except:
+                            pass
+                    try:
+                        matched = conf("twitter." + key) == value
+                    except:
+                        matched = False
+                    if not matched:
+                        try:
+                            insertconf("twitter." + key, value, helpstr='<a href="/admin/authtwitter">Click here to go through the twitter authorization process.</a>')
+                        except:
+                            pass
+                else:
+                    disp_queries.append(query)
+            if len(disp_queries) > 0:
+                return templates.get_template('admin_authtwitter.html').render(queries=disp_queries)
+        except Exception as e:
+            errorstring = f'Failed authentication with error: {e}'
+            return templates.get_template('admin_blank.html').render(content=errorstring)
+
+        # if the code makes it this far, twitterauth must have succeeded
+        # offer to make a test tweet
+        queries = [
+                {"id" : "tweet", "instruction" : "It looks like twitter is configured properly!  You can use this form to send a test tweet.", "label" : "Tweet Text: "}
+                ]
+
+        if "tweet" in formdata:
+            send_tweet(formdata["tweet"])
+
+
+        return templates.get_template('admin_authtwitter.html').render(queries=queries)
+
+
+    @cherrypy.expose
     def testzoom(self, test=None):
         if test=='make_meeting':
             zoom_meet_config = {'start_time':str(datetime.datetime.now()),
@@ -860,6 +997,7 @@ def allauth(realm,u,p):
 
 if __name__ == '__main__':
     log.info('server starting')
+    log.info(f'using port {conf("server.port")}')
     cherrypy.config.update({'server.socket_host'     : '0.0.0.0',
                             'server.socket_port'     : conf('server.port'),
                             'tools.encode.on'        : True,
