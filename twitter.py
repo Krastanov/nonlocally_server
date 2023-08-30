@@ -214,11 +214,11 @@ class Twitter:
 
             if response.status_code != 201:
                 logtext = f"tweet failed due to response {response.status_code} : {response.text}"
-                return False
-            return True
+                return logtext
+            return
         except Exception as e:
             logtext = f"tweet failed due to exception {e}"
-            return False
+            return logtext
         finally:
             if logtext is not None:
                 if log is not None:
