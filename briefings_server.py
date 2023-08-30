@@ -875,7 +875,7 @@ class Admin:
         # if the code makes it this far, twitterauth must have succeeded
         # offer to make a test tweet
         queries = [
-                {"id" : "tweet", "instruction" : "It looks like twitter is configured properly!  You can use this form to send a test tweet.", "label" : "Tweet Text: "}
+                {"id" : "tweet", "instruction" : "It looks like twitter is configured properly!  You can use this form to send a test tweet.  To re-do the twitter authorization process, set twitter.consumer_key or twitter.consumer_secret to an empty string from the Configuration panel.  Doing so will delete all of the Twitter API keys and reset the authorization process.", "label" : "Tweet Text: "}
                 ]
 
         errorstring = None

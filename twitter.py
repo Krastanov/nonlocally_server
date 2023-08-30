@@ -87,12 +87,19 @@ class Twitter:
 
         if extradata is None:
             extradata = dict()
-        # If the consumer_key or consumer_secret is missing, we must send the user to the twitter page to 
+        # If the consumer_key or consumer_secret is missing, we must send the user to the twitter page to get them
+        # Also if either of these is None, clear out any other data so we can restart the process.
         if self.consumer_key is None or self.consumer_secret is None:
             queries = [
                     {"id" : "consumer_key", "instruction" : '<a href="https://developer.twitter.com/en/portal/projects-and-apps" target="_blank" rel="noopener noreferrer">Click here</a> and click on the key that says "access and tokens", and get the consumer key and secret.', "label" : "Consumer Key: "},
-                    {"id" : "consumer_secret", "label" : "Consumer Secret: "}
+                    {"id" : "consumer_secret", "label" : "Consumer Secret: "},
+            # This is to allow easier resetting of the twitter API keys (previously you would have to remove all the keys manually)
+                    {"save_key" : "resource_owner_key", "save_value" : ""},
+                    {"save_key" : "resource_owner_secret", "save_value" : ""},
+                    {"save_key" : "access_token", "save_value" : ""},
+                    {"save_key" : "access_secret", "save_value" : ""},
                     ]
+
             return queries
 
         if self.access_token is None or self.access_secret is None:
