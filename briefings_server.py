@@ -164,9 +164,11 @@ def send_tweet(text_content, pngbytes=None):
             if media_id is None: # abort tweeting if media upload fails rather than tweet without media (error logs will happen in the upload_media function so logging here would be redundant)
                 return
 
-        twitter.tweet(text_content, media_id, log=log)
+        errorstring = twitter.tweet(text_content, media_id, log=log)
+        return errorstring
     except Exception as e:
         log.error(f"sending tweet failed due to exception {e}")
+        return e
 
 
 def ZOOM_TEMPLATE():
@@ -873,14 +875,16 @@ class Admin:
         # if the code makes it this far, twitterauth must have succeeded
         # offer to make a test tweet
         queries = [
-                {"id" : "tweet", "instruction" : "It looks like twitter is configured properly!  You can use this form to send a test tweet.", "label" : "Tweet Text: "}
+                {"id" : "tweet", "instruction" : "It looks like twitter is configured properly!  You can use this form to send a test tweet.  To re-do the twitter authorization process, set twitter.consumer_key or twitter.consumer_secret to an empty string from the Configuration panel.  Doing so will delete all of the Twitter API keys and reset the authorization process.", "label" : "Tweet Text: "}
                 ]
 
+        errorstring = None
         if "tweet" in formdata:
-            send_tweet(formdata["tweet"])
+            error = send_tweet(formdata["tweet"])
+            if error:
+                errorstring = getattr(error, 'message', repr(error))
 
-
-        return templates.get_template('admin_authtwitter.html').render(queries=queries)
+        return templates.get_template('admin_authtwitter.html').render(queries=queries, debugstr=errorstring)
 
 
     @cherrypy.expose
