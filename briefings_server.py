@@ -206,8 +206,11 @@ def check_upcoming_talks_and_email():
                 datestr = r['date'].strftime('%b %-d')
                 subject = f"Upcoming talk {datestr} - {r['title']} by {r['speaker']}"
                 priv_subject = f"Private Schedule - {r['title']} by {r['speaker']}"
-                public_url = 'https://'+conf('server.url')+'/event/'+urllib.parse.quote(str(r['date']))+'/'+str(r['warmup'])
                 upcoming_url = 'https://'+conf('server.url')
+                if conf('server.alluser') and conf('server.publicfrontpageoverride'):
+                    public_url = upcoming_url
+                else:
+                    public_url = 'https://'+conf('server.url')+'/event/'+urllib.parse.quote(str(r['date']))+'/'+str(r['warmup'])
                 if all_upcoming_talks:
                     _html = "".join([f"<p>{t['date']} | {t['title']} - {t['speaker']}</p>" for t in all_upcoming_talks if t!=r])
                     _plain = "\n".join([f"{t['date']} | {t['title']} - {t['speaker']}" for t in all_upcoming_talks if t!=r])
@@ -320,15 +323,23 @@ class Root:
         return templates.get_template('__iframeupcoming.html').render(records=records)
 
     @cherrypy.expose
-    def past(self):
+    def about(self):
+        return templates.get_template('__about.html').render(seminar=conf('event.name'),description=conf('event.description'),longdescription=conf('event.longdescription'),aboutnonlocally='')
+
+
+class Past:
+    @cherrypy.expose
+    def index(self):
         with conn() as c:
             all_talks = list(c.execute('SELECT date, speaker, affiliation, title, abstract, bio, recording_consent, recording_link, location, recording_processed FROM events WHERE warmup=0 ORDER BY date DESC'))
         now = datetime.datetime.now()
         records = [t for t in all_talks if t[0]<now]
         return templates.get_template('__past.html').render(records=records)
 
+@cherrypy.popargs('date', 'warmup')
+class Event:
     @cherrypy.expose
-    def event(self, date, warmup):
+    def index(self, date, warmup):
         try:
             with conn() as c:
                 warmup = warmup and not (warmup=='False' or warmup=='0') # TODO this should not be such a mess to parse
@@ -340,10 +351,6 @@ class Root:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
         return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup)
-
-    @cherrypy.expose
-    def about(self):
-        return templates.get_template('__about.html').render(seminar=conf('event.name'),description=conf('event.description'),longdescription=conf('event.longdescription'),aboutnonlocally='')
 
 
 class Apply:
@@ -1040,14 +1047,21 @@ if __name__ == '__main__':
                               'tools.auth_basic.checkpassword': sysauth,
                              }}
     root_conf = {**static_conf,**video_conf,**customfiles_conf}
+    past_conf = {}
+    event_conf = {}
     if conf('server.alluser'):
-        root_conf = {**root_conf,
-                     '/':{
-                          'tools.auth_basic.on': True,
-                          'tools.auth_basic.realm': 'all',
-                          'tools.auth_basic.checkpassword': allauth,
-                         }}
+        all_auth = {
+                    'tools.auth_basic.on': True,
+                    'tools.auth_basic.realm': 'all',
+                    'tools.auth_basic.checkpassword': allauth,
+                   }
+        if not conf('server.publicfrontpageoverride'):
+            root_conf = {**root_conf, '/':all_auth}
+        past_conf = {**past_conf, '/':all_auth}
+        event_conf = {**event_conf, '/':all_auth}
     cherrypy.tree.mount(Root(), '/', root_conf)
+    cherrypy.tree.mount(Past(), '/past', past_conf)
+    cherrypy.tree.mount(Event(), '/event', event_conf)
     cherrypy.tree.mount(Invite(), '/invite', {})
     cherrypy.tree.mount(Apply(), '/apply', {})
     cherrypy.tree.mount(Admin(), '/admin', password_conf)
