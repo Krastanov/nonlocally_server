@@ -350,6 +350,8 @@ class Event:
         except:
             log.error('Attempted opening unknown talk %s %s'%(date, warmup))
             return templates.get_template('__blank.html').render(content='There does not exist a talk given at that time in our database!')
+        if not conf('zoom.clientid'): # in case no Zoom is set up at all
+            talk['conf_link'] = None
         return templates.get_template('__event.html').render(talk=talk, has_warmup=not warmup and has_warmup)
 
 

@@ -55,6 +55,7 @@
     {% endif %}
     {% if conf_link %}
     <a href="{{conf_link if conf_link else ''}}">video conference link</a>
+    {% elif conf_link==None %}
     {% else %}
     video conference link will be posted shortly
     {% endif %}
