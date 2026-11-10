@@ -1,25 +1,20 @@
-#start with debian:10
-FROM debian:10
+FROM debian:12
 
-# make a directory to work from
-RUN mkdir /workdir
 WORKDIR /workdir
 
-# install packages from apt that we will need
-# currently its just 'python3', 'python3-pip', 'sqlite3', and 'ffmpeg'
-# if more programs are needed they should be added here
-RUN apt update
-RUN DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends python3 python3-pip sqlite3 wget && apt clean
-RUN DEBIAN_FRONTEND=noninteractive apt install -y ffmpeg libx264-155 libx265-165 && apt clean
+# Keep package indexes and installation in the same layer on security rebuilds.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        python3 python3-venv sqlite3 wget ffmpeg libx264-164 libx265-199 && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN rm -rf /var/lib/apt/lists/*
+# Debian manages the system Python; install application packages in a venv.
+RUN python3 -m venv /workdir/env
+ENV PATH="/workdir/env/bin:$PATH"
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip wheel && \
+    pip install --no-cache-dir -r requirements.txt
+COPY . ./
 
-# copy all files, including the requirements.txt file into the container and install the python packages listed on it via pip
-# 'pip install --upgrade pip' and 'pip install wheel' just ensure that the later installs run smoothly
-COPY ./requirements.txt ./requirements.txt
-RUN pip3 install --upgrade pip
-RUN pip3 install wheel
-RUN pip3 install -r requirements.txt
-COPY ./ ./
-
-ENTRYPOINT ["python3", "briefings_server.py"]
+ENTRYPOINT ["python", "briefings_server.py"]
